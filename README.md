@@ -8,6 +8,20 @@ Deze repo is het zaad: clone hem op de nieuwe install en `nixos-rebuild` bouwt a
 - BE-toetsenbord · `en_GB.UTF-8` · Europe/Brussels · gebruiker `ogryson` · shell bash
 - Volledige inventaris staat in `./inventory/` (pakketten, services, netwerk, enz.)
 
+## Repo-structuur
+```
+flake.nix                  entrypoint (systeem + home-manager)
+configuration.nix          systeem: drivers, services, virt, printing, hibernate, Hyprland-basis
+hardware-configuration.nix  PLACEHOLDER → genereren op nieuwe machine (Fase 2)
+home.nix                   home-manager entry (wire-up, importeert home/*)
+home/
+  packages.nix             apps, dev-tooling, CLI/terminal-tools
+  programs.nix             git, bash, kitty, shell-QoL
+  desktop.nix              Hyprland + Wayland-desktop (pakketten én config)
+  webapps.nix              PWA-launchers (SoundCloud, Snapchat)
+inventory/                 ruwe dump van het oude systeem (referentie)
+```
+
 ---
 
 ## Fase 0 — Backup (op het OUDE systeem, vóór je iets wist)
@@ -38,31 +52,38 @@ Op externe schijf (≥ 500G), en **verifieer** voor je wist:
 2. Boot USB (UEFI, secure boot UIT in BIOS).
 3. Netwerk: `sudo systemctl start wpa_supplicant` of `nmtui` → join WiFi. Test `ping nixos.org`.
 
-### Partitieschema (hele schijf `/dev/nvme0n1`)
+### Partitieschema (hele schijf `/dev/nvme0n1`) — MET swap voor hibernate
+RAM = 16G → swap-partitie 17G (≥ RAM, nodig om te kunnen hibernaten).
 ```bash
 sudo wipefs -a /dev/nvme0n1
 sudo parted /dev/nvme0n1 -- mklabel gpt
-sudo parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 1GiB        # ESP 1G (was 512M = te krap)
+sudo parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 1GiB          # ESP 1G (was 512M = te krap)
 sudo parted /dev/nvme0n1 -- set 1 esp on
-sudo parted /dev/nvme0n1 -- mkpart primary 1GiB 100%          # rest = btrfs
+sudo parted /dev/nvme0n1 -- mkpart swap linux-swap 1GiB 18GiB   # 17G swap = hibernate-target
+sudo parted /dev/nvme0n1 -- mkpart primary 18GiB 100%          # rest = btrfs
 sudo mkfs.fat -F32 -n BOOT /dev/nvme0n1p1
-sudo mkfs.btrfs -L NIXOS /dev/nvme0n1p2
+sudo mkswap -L SWAP /dev/nvme0n1p2
+sudo swapon /dev/nvme0n1p2          # AAN laten staan → generate-config pikt swapDevices op
+sudo mkfs.btrfs -L NIXOS /dev/nvme0n1p3
 ```
 Btrfs-subvolumes (zelfde @/@home-stijl als je oude setup):
 ```bash
-sudo mount /dev/nvme0n1p2 /mnt
+sudo mount /dev/nvme0n1p3 /mnt
 sudo btrfs subvolume create /mnt/@
 sudo btrfs subvolume create /mnt/@home
 sudo btrfs subvolume create /mnt/@nix
 sudo umount /mnt
 OPTS=compress=zstd,noatime
-sudo mount -o subvol=@,$OPTS /dev/nvme0n1p2 /mnt
+sudo mount -o subvol=@,$OPTS /dev/nvme0n1p3 /mnt
 sudo mkdir -p /mnt/{home,nix,boot}
-sudo mount -o subvol=@home,$OPTS /dev/nvme0n1p2 /mnt/home
-sudo mount -o subvol=@nix,$OPTS   /dev/nvme0n1p2 /mnt/nix
+sudo mount -o subvol=@home,$OPTS /dev/nvme0n1p3 /mnt/home
+sudo mount -o subvol=@nix,$OPTS   /dev/nvme0n1p3 /mnt/nix
 sudo mount /dev/nvme0n1p1 /mnt/boot
 ```
-> Geen swap-partitie: config gebruikt zram. Wil je **hibernate**, maak dan vooraf een swap-partitie ≥ 16G en zeg het me — dan pas ik de config aan.
+> Hibernate staat aan in de config (`boot.resumeDevice` = label `SWAP`, lid-dicht →
+> suspend-then-hibernate na 30 min). Belangrijk: laat `swapon` actief vóór
+> `nixos-generate-config`, anders ontbreekt `swapDevices` (dan handmatig toevoegen,
+> zie comment in `configuration.nix`).
 
 ---
 
@@ -116,7 +137,9 @@ Reboot → SDDM → kies **Hyprland**. Keybinds: `SUPER+Return` terminal, `SUPER
 - **SSH**: `~/.ssh/` terugzetten, `chmod 600 id_ed25519`.
 - **WiFi**: NM-connections terugzetten of opnieuw joinen.
 - **Ollama**: modellen NIET nodig — geen restore/pull. Service staat aan; pull later handmatig als je ze ooit wil.
-- **Flatpak geschrapt.** Enkel Angry IP Scanner blijft (nu als nix-pakket `angryipscanner`). Wil je later toch NormCap/Minecraft/ProtonVPN: zeg het, ik voeg de nix-pakketten toe (geen Flatpak nodig).
+- **pass** (password-store): vereist je GnuPG-sleutel + `~/.password-store`. Zet `~/.gnupg/` en `~/.password-store/` terug uit de backup, anders kan `pass` niks ontsleutelen.
+- **Waydroid**: service staat aan, maar de Android-image + apps moeten opnieuw: `sudo waydroid init` daarna apps herinstalleren (KU Leuven authenticator, enz.). `/var/lib/waydroid` uit backup terugzetten kán, maar fresh init is betrouwbaarder.
+- **Webapps** (SoundCloud, Snapchat): al declaratief geregeld (`home/webapps.nix`) — verschijnen vanzelf in wofi, niks te doen.
 - **Brother scanner** (MFCL2800DW): SANE staat aan; USB-scannen vereist mogelijk `brscan5` — meld het als de scanner niet opduikt, dan voeg ik een overlay/driver toe.
 - **node/bun**: config levert `nodejs_22` + `bun` systeembreed; je `.nvm`/`.bun` uit de backup is niet meer nodig (mag weg).
 

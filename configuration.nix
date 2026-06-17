@@ -87,14 +87,26 @@
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
+  virtualisation.waydroid.enable = true;   # Android-container (KU Leuven authenticator e.a.)
   services.ollama.enable = true;   # geen modellen auto-pullen; later handmatig indien gewenst
 
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
   programs.steam.remotePlay.openFirewall = true;
 
-  #### Swap (zram; add a disk swap partition if you want hibernate) ###########
+  #### Swap + hibernate #######################################################
+  # zram = fast compressed RAM swap for daily use.
+  # The on-disk SWAP partition (>= RAM, see README partitioning) is the
+  # hibernate image target.
   zramSwap.enable = true;
+  boot.resumeDevice = "/dev/disk/by-label/SWAP";
+  # swapDevices for the SWAP partition is normally written by
+  # nixos-generate-config (run `swapon /dev/disk/by-label/SWAP` before
+  # generating). If it isn't, uncomment:
+  #   swapDevices = [ { device = "/dev/disk/by-label/SWAP"; } ];
+  powerManagement.enable = true;
+  services.logind.lidSwitch = "suspend-then-hibernate";
+  systemd.sleep.extraConfig = "HibernateDelaySec=30min";
 
   #### Fonts #################################################################
   fonts.packages = with pkgs; [
