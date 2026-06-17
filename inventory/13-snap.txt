@@ -1,0 +1,13 @@
+Name                   Version                      Rev    Tracking       Publisher    Notes
+bare                   1.0                          5      latest/stable  canonical**  base
+core                   16-2.61.4-20260225           17292  latest/stable  canonical**  core
+core20                 20260410                     2866   latest/stable  canonical**  base
+core24                 20260410                     1643   latest/stable  canonical**  base
+gtk-common-themes      0.1-81-g442e511              1535   latest/stable  canonical**  -
+hunspell-dictionaries  u16.04-20180902+pkg-8e08     21     latest/stable  brlin        -
+kf6-core24             6.10.1-6.20.0-6.5.3-25.08.3  36     latest/stable  kde**        -
+lxqt-support-core24    6.10.1                       16     latest/stable  kyuyrii      -
+mesa-2404              25.0.7-snap211               1165   latest/stable  canonical**  -
+qt515-core20           5.15.4                       46     latest/stable  keshavnrj*   -
+snapd                  2.75.2                       26865  latest/stable  canonical**  snapd
+whatsie                5.1.0                        185    latest/stable  keshavnrj*   -

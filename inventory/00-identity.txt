@@ -1,0 +1,8 @@
+hostname: dragonflyg4
+timezone: Europe/Brussels
+user: ogryson
+shell: /bin/bash
+passwd: ogryson:x:1000:1000:olav gryson:/home/ogryson:/bin/bash
+groups: ogryson cdrom floppy sudo audio dip video plugdev netdev scanner i2c bluetooth lpadmin libvirt ollama docker render kvm
+ram_kb: MemTotal:       15943168 kB
+kernel: 6.12.90+deb13.1-amd64

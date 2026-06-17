@@ -1,0 +1,10 @@
+# never commit secrets — these belong on the backup drive, not in git
+*.key
+id_*
+!id_*.pub
+*system-connections*
+*.kdbx
+.ollama/
+secrets/
+result
+result-*

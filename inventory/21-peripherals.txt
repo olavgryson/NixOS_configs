@@ -1,0 +1,12 @@
+## printers
+printer MFCL2800DW is idle.  enabled since Fri 12 Sep 2025 20:17:32 CEST
+printer RICOH_SP_325DNw_cf5cba disabled since Tue 28 Apr 2026 16:47:15 CEST -
+	reason unknown
+printer SP325DNw_DS_V1 disabled since Tue 28 Apr 2026 16:47:16 CEST -
+	reason unknown
+## audio server
+Server String: /run/user/1000/pulse/native
+Server Name: PulseAudio (on PipeWire 1.4.2)
+pipewire present
+## bluetooth
+active

@@ -1,0 +1,38 @@
+WiFi-2.4-DED0:802-11-wireless:wlp0s20f3
+br-9e404c5968b7:bridge:br-9e404c5968b7
+lo:loopback:lo
+lxcbr0:bridge:lxcbr0
+br-0dcb4aa3d666:bridge:br-0dcb4aa3d666
+br-2e32a2a85737:bridge:br-2e32a2a85737
+br-4d676a8a0109:bridge:br-4d676a8a0109
+br-7f7d823d5fe3:bridge:br-7f7d823d5fe3
+br-9eb023dd6f1c:bridge:br-9eb023dd6f1c
+br-b27374086e8b:bridge:br-b27374086e8b
+br-d2eca2d59eae:bridge:br-d2eca2d59eae
+br-eeaf4a63dcfa:bridge:br-eeaf4a63dcfa
+br-fb1a0a3412e1:bridge:br-fb1a0a3412e1
+docker0:bridge:docker0
+ARhus gratis WIFI:802-11-wireless:
+campusroam:802-11-wireless:
+City Host:802-11-wireless:
+Devoxx:802-11-wireless:
+DevoxxLabs:802-11-wireless:
+Dovy Keukens - De Munt:802-11-wireless:
+GeoDynamics Guest:802-11-wireless:
+HorseAlly:802-11-wireless:
+mijnwifi.be - secure:802-11-wireless:
+MPI:802-11-wireless:
+Orange-wbx9k:802-11-wireless:
+Orange-wbx9k-5GHz:802-11-wireless:
+Stad Roeselare Guest:802-11-wireless:
+SUN2000-HV2190215555:802-11-wireless:
+Telenet2056904:802-11-wireless:
+telenet-43742:802-11-wireless:
+Telenet8958937:802-11-wireless:
+TT-GUEST:802-11-wireless:
+wifi1352:802-11-wireless:
+WiFi-2.4-9352:802-11-wireless:
+WiFi-5.0-DED0:802-11-wireless:
+Wired connection 1:802-3-ethernet:
+Zenfone 10:802-11-wireless:
+Zenfone 10 Network:bluetooth:

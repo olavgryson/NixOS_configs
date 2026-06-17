@@ -1,0 +1,4 @@
+node v22.20.0
+Python 3.13.5
+Docker version 29.5.3, build d1c06ef
+ollama version is 0.30.7
