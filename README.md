@@ -115,12 +115,8 @@ Reboot → SDDM → kies **Hyprland**. Keybinds: `SUPER+Return` terminal, `SUPER
 - **Data terug**: `rsync` je backup naar `/home/ogryson/` (sla de KDE-`.config` over; Hyprland is nieuw).
 - **SSH**: `~/.ssh/` terugzetten, `chmod 600 id_ed25519`.
 - **WiFi**: NM-connections terugzetten of opnieuw joinen.
-- **Ollama**: `~/.ollama/` terugzetten, of `ollama pull qwen3.5:4b qwen3:1.7b`.
-- **Flatpak remote** (voor NormCap/Minecraft/ProtonVPN/AngryIP):
-  ```bash
-  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  ```
-  dan de 4 apps herinstalleren (zie `inventory/12-flatpak.txt`).
+- **Ollama**: modellen NIET nodig — geen restore/pull. Service staat aan; pull later handmatig als je ze ooit wil.
+- **Flatpak geschrapt.** Enkel Angry IP Scanner blijft (nu als nix-pakket `angryipscanner`). Wil je later toch NormCap/Minecraft/ProtonVPN: zeg het, ik voeg de nix-pakketten toe (geen Flatpak nodig).
 - **Brother scanner** (MFCL2800DW): SANE staat aan; USB-scannen vereist mogelijk `brscan5` — meld het als de scanner niet opduikt, dan voeg ik een overlay/driver toe.
 - **node/bun**: config levert `nodejs_22` + `bun` systeembreed; je `.nvm`/`.bun` uit de backup is niet meer nodig (mag weg).
 

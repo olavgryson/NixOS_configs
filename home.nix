@@ -24,7 +24,6 @@
     gh lazygit
     nodejs_22 corepack_22 bun
     python313 uv pipx
-    ansible
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
     gnumake gcc
@@ -43,9 +42,8 @@
     spotify
     vlc mpv
     obs-studio
-    gimp
     libreoffice-fresh hunspell hunspellDicts.nl_BE hunspellDicts.en_GB
-    keepassxc
+    angryipscanner    # netwerk-scanner (was Flatpak; verifieer attr: nix search nixpkgs angry)
 
     ## --- wine / gaming extras ---
     wineWowPackages.stable winetricks

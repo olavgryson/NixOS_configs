@@ -87,14 +87,11 @@
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
-  services.ollama.enable = true;   # re-pull models, or restore ~/.ollama from backup (see README)
+  services.ollama.enable = true;   # geen modellen auto-pullen; later handmatig indien gewenst
 
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
   programs.steam.remotePlay.openFirewall = true;
-
-  #### Flatpak (NormCap, Minecraft, Proton VPN, Angry IP Scanner) #############
-  services.flatpak.enable = true;   # add flathub remote post-install (see README)
 
   #### Swap (zram; add a disk swap partition if you want hibernate) ###########
   zramSwap.enable = true;
