@@ -138,8 +138,17 @@ Reboot → SDDM → kies **Hyprland**. Keybinds: `SUPER+Return` terminal, `SUPER
 - **WiFi**: NM-connections terugzetten of opnieuw joinen.
 - **Ollama**: modellen NIET nodig — geen restore/pull. Service staat aan; pull later handmatig als je ze ooit wil.
 - **pass** (password-store): vereist je GnuPG-sleutel + `~/.password-store`. Zet `~/.gnupg/` en `~/.password-store/` terug uit de backup, anders kan `pass` niks ontsleutelen.
-- **Waydroid**: service staat aan, maar de Android-image + apps moeten opnieuw: `sudo waydroid init` daarna apps herinstalleren (KU Leuven authenticator, enz.). `/var/lib/waydroid` uit backup terugzetten kán, maar fresh init is betrouwbaarder.
-- **Webapps** (SoundCloud, Snapchat): al declaratief geregeld (`home/webapps.nix`) — verschijnen vanzelf in wofi, niks te doen.
+- **Webapps** (SoundCloud, Snapchat): geen native Linux/nixpkgs-app beschikbaar → blijven `--app=` wrappers (Chromium), al geregeld in `home/webapps.nix`. Verschijnen vanzelf in wofi.
+- **Browsers**: firefox · chromium (voor de webapps) · **librewolf** · **zen** (vervangt brave, via flake-input). Bij de eerste build verifieer ik de zen-flake-URL + binary-naam.
+
+## Antigravity editor (handmatig packagen)
+Google Antigravity zit **niet** in nixpkgs (te nieuw + proprietary). Op de nieuwe
+machine pak ik dit zo aan — kies één:
+1. **Officiële download** (`.deb`/AppImage) → ik schrijf een derivation
+   (`pkgs/antigravity.nix`, autoPatchelf/appimageTools) met de juiste hash.
+   Geef me de download-URL, of ik haal hem van de Antigravity-site.
+2. Tijdelijk via `distrobox`/`nix-shell` tot het gepackaged is.
+Tot dan: VSCode + Claude Code dekken het meeste.
 - **Brother scanner** (MFCL2800DW): SANE staat aan; USB-scannen vereist mogelijk `brscan5` — meld het als de scanner niet opduikt, dan voeg ik een overlay/driver toe.
 - **node/bun**: config levert `nodejs_22` + `bun` systeembreed; je `.nvm`/`.bun` uit de backup is niet meer nodig (mag weg).
 

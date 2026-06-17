@@ -3,14 +3,17 @@
 #  (Hyprland/Wayland desktop packages live in ./desktop.nix.)
 #  home.packages merges across modules, so this list is desktop-free on purpose.
 ################################################################################
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 {
   home.packages = with pkgs; [
     ## --- the thing you want first ---
     claude-code
 
     ## --- browsers ---
-    firefox chromium brave
+    firefox
+    chromium                                              # kept: drives the web-app launchers (--app=)
+    librewolf                                             # extra hardened Firefox fork
+    inputs.zen-browser.packages.${pkgs.system}.default    # Zen (replaces Brave)
 
     ## --- dev tooling ---
     gh lazygit
@@ -23,8 +26,10 @@
     ## --- editors / IDEs ---
     vscode
     neovim
-    jetbrains.idea-community           # was "intellij-idea" (use idea-ultimate if you had the paid one)
+    jetbrains.idea-community           # IntelliJ IDEA Community (free) — confirmed
     tmux
+    # antigravity (Google's AI editor) is NOT in nixpkgs — packaged separately
+    # from the official download on the new machine (see README "Antigravity").
 
     ## --- terminal / CLI tools (detected on your Debian box) ---
     ripgrep fd fzf bat eza zoxide jq yq

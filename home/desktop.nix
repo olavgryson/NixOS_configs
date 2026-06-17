@@ -70,7 +70,7 @@
         "$mod, V, togglefloating,"
         "$mod, F, fullscreen,"
         "$mod, L, exec, hyprlock"
-        "$mod, B, exec, firefox"
+        "$mod, B, exec, zen"          # Zen browser (verify binary name on first run)
         # focus
         "$mod, left, movefocus, l"
         "$mod, right, movefocus, r"
