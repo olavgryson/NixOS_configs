@@ -13,6 +13,10 @@ Deze repo is het zaad: clone hem op de nieuwe install en `nixos-rebuild` bouwt a
 flake.nix                  entrypoint (systeem + home-manager)
 configuration.nix          systeem: drivers, services, virt, printing, hibernate, Hyprland-basis
 hardware-configuration.nix  PLACEHOLDER → genereren op nieuwe machine (Fase 2)
+greeter.nix                loginscherm: greetd + ReGreet in een kale Hyprland
+wallpaper.nix              de ene wallpaper voor login-, desktop- en lockscherm
+theme.nix                  kleurpalet, uit die wallpaper bemonsterd
+wallpapers/                de afbeeldingen zelf (moeten getrackt zijn, zie hieronder)
 home.nix                   home-manager entry (wire-up, importeert home/*)
 home/
   packages.nix             apps, dev-tooling, CLI/terminal-tools
@@ -20,6 +24,8 @@ home/
   desktop.nix              Hyprland + Wayland-desktop (pakketten én config)
   webapps.nix              PWA-launchers (SoundCloud, Snapchat)
 inventory/                 ruwe dump van het oude systeem (referentie)
+docs/
+  hibernation-ipu6.md      why hibernation aborts on this machine (IPU6 camera)
 ```
 
 ---
@@ -40,9 +46,8 @@ Op externe schijf (≥ 500G), en **verifieer** voor je wist:
    - WiFi-wachtwoorden: `sudo cp -a /etc/NetworkManager/system-connections/ EXT/nm-connections/`
      (terugzetten naar dezelfde map op NixOS, dan `chmod 600`, `chown root`). Anders 23 netwerken opnieuw via `nmtui`.
    - Browser-profielen, KeePass-db, GPG (geen gevonden), `.config` van apps die je wil bewaren.
-3. **Ollama-modellen**: `~/.ollama/` meenemen (qwen3.5:4b, qwen3:1.7b) — of later opnieuw `ollama pull`.
-4. **Deze repo**: kopieer `~/nixos-config/` naar de externe schijf (of push naar een private GitHub repo).
-5. **VERIFIEER**: zet één willekeurige file terug en open hem. Check `du -sh` van bron vs doel. Pas dán wissen.
+3. **Deze repo**: kopieer `~/nixos-config/` naar de externe schijf (of push naar een private GitHub repo).
+4. **VERIFIEER**: zet één willekeurige file terug en open hem. Check `du -sh` van bron vs doel. Pas dán wissen.
 
 ---
 
@@ -127,7 +132,87 @@ sudo nixos-install --flake ~/nixos-config#dragonflyg4
 # of, al gebooted in NixOS:
 sudo nixos-rebuild switch --flake ~/nixos-config#dragonflyg4
 ```
-Reboot → SDDM → kies **Hyprland**. Keybinds: `SUPER+Return` terminal, `SUPER+R` launcher, `SUPER+B` browser, `SUPER+L` lock.
+Reboot → **greetd/ReGreet** loginscherm → sessie **Hyprland**.
+Keybinds: `SUPER+Return` terminal, `SUPER+R` launcher, `SUPER+B` browser, `SUPER+L` lock.
+
+### Loginscherm (`greeter.nix`) — was SDDM
+
+SDDM is eruit. Twee concrete problemen die dat oploste:
+
+1. **Touchpad dood op het loginscherm.** SDDM's Wayland-greeter draait onder
+   `weston --shell=kiosk`, en weston pikte de I2C-HID Synaptics (`SYNA310F:00`)
+   van deze laptop niet op — vandaar dat er een USB-muis nodig was, terwijl
+   diezelfde touchpad in Hyprland prima werkt. ReGreet draait nu ín Hyprland,
+   dus het loginscherm gebruikt exact dezelfde libinput-stack als je desktop.
+
+2. **"Reached target Graphical Interface" na inloggen.** De hyprland-package
+   levert twee sessiebestanden: `hyprland.desktop` (werkt) en
+   `hyprland-uwsm.desktop` (start `uwsm`). Die tweede vereist
+   `programs.uwsm.enable`, wat alleen aangaat via
+   `programs.hyprland.withUWSM = true` — default uit. Koos je hem toch, dan
+   stierf de sessie binnen een seconde en viel je terug op VT1, waar die
+   console-regel de laatste is. SDDM onthield je keuze, dus het bleef mislukken.
+   `greeter.nix` filtert die kapotte sessie nu weg; je kúnt hem niet meer kiezen.
+
+**Wallpaper wisselen:** zet de afbeelding in `wallpapers/`, **`git add` hem**
+(flakes kopiëren alleen getrackte bestanden naar de store — zonder add faalt de
+build met "path does not exist"), en pas `src` in `wallpaper.nix` aan.
+Loginscherm, desktop (hyprpaper) en lockscherm (hyprlock) delen die ene
+afbeelding.
+
+**Kleuren wisselen:** `theme.nix` bevat het palet dat uit de huidige wallpaper
+is bemonsterd. Waybar, mako, SwayOSD, rofi, hyprlock, de vensterranden en het
+loginscherm lezen daar allemaal uit, dus één hexcode aanpassen verandert het
+overal tegelijk. Neem je een andere wallpaper, dan hoor je hier nieuwe kleuren
+uit te halen — bijvoorbeeld met:
+
+```bash
+magick wallpapers/jouw-wallpaper.jpg -resize 200x -colors 16 -unique-colors txt:
+```
+
+**Let op bij hyprpaper:** sinds 0.8 bestaat `preload` niet meer en is `wallpaper`
+een blok (`wallpaper { monitor = ; path = … ; fit_mode = cover }`). De oude
+`wallpaper = ,/pad`-vorm geeft géén foutmelding, hij doet alleen niets — het
+enige spoor is `Monitor eDP-1 has no target: no wp will be created` in
+`journalctl --user -u hyprpaper`.
+
+**Waybar custom modules — `interval = 0` does not mean "never poll".** To waybar
+it means *"this script is persistent, keep reading its stdout forever"*. If the
+script prints its output and exits, waybar hits EOF on the pipe and then spins on
+it: no error, no log line, the module renders correctly, and the bar quietly eats
+a CPU core forever. `custom/brightness-ext` shipped this way and cost **15% CPU
+permanently** — 42 million read syscalls and 80 GB of pipe reads in under two
+hours of uptime.
+
+Use `interval = "once"` (the string, not `0`) for a script that runs and exits.
+That runs it a single time at startup, and after that only when its `signal`
+arrives. Both values look equally "idle" in the config, which is exactly why this
+is worth writing down.
+
+Rule of thumb: `interval = 0` is only correct for a script that never returns
+(a `while true` loop that keeps printing). Anything that exits wants `"once"`
+or a real number of seconds.
+
+To catch this class of bug — a process busy-looping without complaining — read
+its syscall counters rather than guessing from `htop`:
+
+```bash
+P=$(pgrep waybar)
+A=$(awk '/syscr/{print $2}' /proc/$P/io); sleep 10
+B=$(awk '/syscr/{print $2}' /proc/$P/io)
+echo "read syscalls/sec: $(( (B-A) / 10 ))"
+```
+
+A healthy waybar sits under ~20/sec. Thousands per second means something is
+spinning on a dead file descriptor. Note that `strace` cannot attach here:
+`kernel.yama.ptrace_scope = 1`. Bisect instead by launching a throwaway bar with
+a subset of modules (`waybar -c test.json -s test.css`) and measuring each.
+
+After changing the config, a `rebuild` only writes the new file to disk — the
+running waybar keeps the old one until you `kill -SIGUSR2 $(pgrep waybar)`.
+
+**Als je ooit buitengesloten raakt:** `Ctrl+Alt+F2` geeft een gewone TTY-login,
+en in systemd-boot kun je de vorige generatie kiezen.
 
 ---
 
@@ -136,19 +221,17 @@ Reboot → SDDM → kies **Hyprland**. Keybinds: `SUPER+Return` terminal, `SUPER
 - **Data terug**: `rsync` je backup naar `/home/ogryson/` (sla de KDE-`.config` over; Hyprland is nieuw).
 - **SSH**: `~/.ssh/` terugzetten, `chmod 600 id_ed25519`.
 - **WiFi**: NM-connections terugzetten of opnieuw joinen.
-- **Ollama**: modellen NIET nodig — geen restore/pull. Service staat aan; pull later handmatig als je ze ooit wil.
+- **Ollama**:
 - **pass** (password-store): vereist je GnuPG-sleutel + `~/.password-store`. Zet `~/.gnupg/` en `~/.password-store/` terug uit de backup, anders kan `pass` niks ontsleutelen.
 - **Webapps** (SoundCloud, Snapchat): geen native Linux/nixpkgs-app beschikbaar → blijven `--app=` wrappers (Chromium), al geregeld in `home/webapps.nix`. Verschijnen vanzelf in wofi.
-- **Browsers**: firefox · chromium (voor de webapps) · **librewolf** · **zen** (vervangt brave, via flake-input). Bij de eerste build verifieer ik de zen-flake-URL + binary-naam.
+- **Browsers**: firefox · chromium (voor de webapps) · **librewolf** · **zen** . Bij de eerste build verifieer ik de zen-flake-URL + binary-naam.
 
-## Antigravity editor (handmatig packagen)
-Google Antigravity zit **niet** in nixpkgs (te nieuw + proprietary). Op de nieuwe
-machine pak ik dit zo aan — kies één:
-1. **Officiële download** (`.deb`/AppImage) → ik schrijf een derivation
-   (`pkgs/antigravity.nix`, autoPatchelf/appimageTools) met de juiste hash.
-   Geef me de download-URL, of ik haal hem van de Antigravity-site.
-2. Tijdelijk via `distrobox`/`nix-shell` tot het gepackaged is.
-Tot dan: VSCode + Claude Code dekken het meeste.
+## Antigravity editor
+Zit inmiddels gewoon in nixpkgs (`antigravity` voor de GUI, `antigravity-cli`
+voor de terminal-agent) — zie `home/packages.nix`. Geen handmatige derivation
+meer nodig. Als extensies problemen geven met dynamic linking buiten de Nix
+store, staan `antigravity-fhs`/`antigravity-ide-fhs` klaar als FHS-wrapped
+alternatief.
 - **Brother scanner** (MFCL2800DW): SANE staat aan; USB-scannen vereist mogelijk `brscan5` — meld het als de scanner niet opduikt, dan voeg ik een overlay/driver toe.
 - **node/bun**: config levert `nodejs_22` + `bun` systeembreed; je `.nvm`/`.bun` uit de backup is niet meer nodig (mag weg).
 

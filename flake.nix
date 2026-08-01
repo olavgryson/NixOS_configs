@@ -34,6 +34,11 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
+            # Zonder dit stopt een rebuild met "Existing file ... is in the way"
+            # zodra home-manager een bestand wil beheren dat er al handmatig
+            # staat. Met een backup-extensie hernoemt hij het oude bestand naar
+            # <naam>.hm-bak en gaat verder — je raakt dus niets kwijt.
+            home-manager.backupFileExtension = "hm-bak";
             home-manager.users.ogryson = import ./home.nix;
             home-manager.extraSpecialArgs = { inherit inputs; };
           }

@@ -8,6 +8,7 @@
     ./home/packages.nix    # apps, dev tooling, CLI/terminal tools
     ./home/programs.nix    # git, bash, kitty, shell QoL
     ./home/desktop.nix     # Hyprland + Wayland desktop (packages + config)
+    ./home/shortcuts.nix   # Hyprland keyboard & mouse shortcuts
     ./home/webapps.nix     # PWA launchers (SoundCloud, Snapchat)
   ];
 
