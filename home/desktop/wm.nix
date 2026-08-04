@@ -102,8 +102,11 @@ in
       # waybar modules stay (they follow the theme); clicking them still opens
       # the GUIs: network -> networkmanager_dmenu (Wi-Fi picker), bluetooth ->
       # blueman-manager.
+      # waybar is deliberately absent here: it runs as its own systemd user
+      # service (programs.waybar.systemd in ../desktop/bar.nix) so that a
+      # monitor-hotplug crash or battery-module hang auto-restarts it instead
+      # of being gone until the next login.
       exec-once = [
-        "waybar"
         "mako"
         "wl-paste --watch cliphist store"
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"

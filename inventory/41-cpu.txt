@@ -1,4 +1,0 @@
-## kvm/virt
-vmx
-## cpu vendor
-vendor_id	: GenuineIntel

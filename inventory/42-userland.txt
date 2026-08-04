@@ -1,4 +1,0 @@
-nvm: /home/ogryson/.nvm
-bun: /home/ogryson/.bun
-cargo: 
-default node: v22.20.0

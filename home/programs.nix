@@ -3,7 +3,7 @@
 ################################################################################
 { pkgs, ... }:
 {
-  #### Git (from current global config) #######################################
+  #### Git ###################################################################
   programs.git = {
     enable = true;
     userName = "Olav Gryson";
@@ -33,7 +33,7 @@
     enable = true;
     settings = {
       font_family = "JetBrainsMono Nerd Font";
-      font_size = 10;                     # was 12
+      font_size = 10;
       background_opacity = "0.95";
       window_padding_width = 6;
       scrollback_lines = 10000;
@@ -43,23 +43,23 @@
       copy_on_select = "clipboard";
       tab_bar_edge = "top";
       tab_bar_style = "powerline";
-      # "splits" moet aan staan, anders doen de vsplit/hsplit-binds niets.
+      # "splits" must be enabled, otherwise the vsplit/hsplit binds do nothing.
       enabled_layouts = "splits,stack";
     };
 
     keybindings = {
-      # Splitsingen binnen één venster.
+      # Splits inside a single window.
       "ctrl+shift+enter" = "launch --location=vsplit --cwd=current";
       "ctrl+shift+d" = "launch --location=hsplit --cwd=current";
       "alt+left" = "neighboring_window left";
       "alt+right" = "neighboring_window right";
       "alt+up" = "neighboring_window up";
       "alt+down" = "neighboring_window down";
-      "ctrl+shift+z" = "toggle_layout stack";   # actieve split even fullscreen
+      "ctrl+shift+z" = "toggle_layout stack";   # fullscreen the active split
 
-      # Rechtstreeks naar een tab. LET OP: op Belgisch AZERTY geeft de
-      # cijferrij onbeschud & é " ' ( § è ! ç à — `alt+1` zou dus Shift
-      # vereisen. We binden daarom op de tekens die de toetsen echt geven.
+      # Jump straight to a tab. NOTE: on Belgian AZERTY the unshifted number
+      # row gives & é " ' ( § è ! ç à, so `alt+1` would require Shift. Bind on
+      # the characters the keys actually produce instead.
       "alt+ampersand" = "goto_tab 1";
       "alt+eacute" = "goto_tab 2";
       "alt+quotedbl" = "goto_tab 3";

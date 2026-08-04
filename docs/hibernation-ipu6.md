@@ -1,10 +1,10 @@
 # Hibernation on dragonflyg4, and why the IPU6 camera breaks it
 
 Investigated 2026-07-30. Status: **cause identified, fix applied, not yet
-proven.** The reboot has happened and `lsmod | grep -E "ipu6|hi556"` is now
-empty, so the blacklist is in effect — but no hibernate attempt has been made
-since. The waybar hibernate button was put back on the same date on the strength
-of the diagnosis alone. Section 8 is still the outstanding test.
+proven.** The IPU6 modules are blacklisted and `lsmod | grep -E "ipu6|hi556"`
+is empty, so the fix is in effect — but no successful hibernate has been
+observed since. Nothing in the config hibernates automatically; section 8 is
+the outstanding test.
 
 ---
 
@@ -162,9 +162,9 @@ systemd.sleep.settings.Sleep = {
 services.logind.settings.Login.HandleLidSwitch = "suspend";   # NOT suspend-then-hibernate
 ```
 
-In `home/desktop.nix`: the hypridle 15-minute action is `systemctl suspend`, and
-`custom/hibernate` is left out of the waybar power drawer (its definition is
-kept, so re-enabling is a one-line change).
+In `home/desktop.nix`: the hypridle 15-minute action is `systemctl suspend`.
+`custom/hibernate` sits in the waybar power drawer as a manual test button — it
+is the only thing in the config that can trigger a hibernate.
 
 Battery level is logged either side of every sleep, so overnight s2idle drain can
 be measured after the fact — plain suspend has never actually been measured here,
@@ -176,13 +176,12 @@ journalctl -u sleep-actions
 
 ## 8. How to finish this
 
-1. ~~Reboot.~~ Done 2026-07-30 21:13.
-2. ~~Confirm the modules are gone: `lsmod | grep -E "ipu6|hi556"`.~~ Verified empty.
-3. `systemctl hibernate`. **← still to do.**
-4. **Success looks like:** the machine writes ~4-6 GB to `/dev/nvme0n1p2` and
+1. Confirm the modules are gone: `lsmod | grep -E "ipu6|hi556"` (should be empty).
+2. Run `systemctl hibernate`.
+3. **Success looks like:** the machine writes ~4-6 GB to the swap partition and
    powers fully off — fans stopped, no lights. Press power, and it boots fresh
    and restores the session.
-5. Verify it was real, not another abort:
+4. Verify it was real, not another abort:
 
 ```bash
 journalctl -k | grep -iE "Image saving|hibernation: Image|systemd-hibernate-resume"

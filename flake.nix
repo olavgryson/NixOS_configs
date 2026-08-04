@@ -12,7 +12,6 @@
     };
 
     # Zen browser ships via its own flake (moves fast, not via nixpkgs).
-    # VERIFY this URL on first build: `nix flake metadata` — community flake.
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,17 +26,17 @@
         inherit system;
         specialArgs = { inherit inputs; };
         modules = [
-          ./hardware-configuration.nix   # GENERATED on the new machine (see README)
+          ./hardware-configuration.nix   # machine-specific, generated (see README)
           ./configuration.nix
 
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            # Zonder dit stopt een rebuild met "Existing file ... is in the way"
-            # zodra home-manager een bestand wil beheren dat er al handmatig
-            # staat. Met een backup-extensie hernoemt hij het oude bestand naar
-            # <naam>.hm-bak en gaat verder — je raakt dus niets kwijt.
+            # Without this a rebuild stops with "Existing file ... is in the way"
+            # as soon as home-manager wants to manage a file that already exists
+            # by hand. With a backup extension it renames the old file to
+            # <name>.hm-bak and carries on, so nothing is lost.
             home-manager.backupFileExtension = "hm-bak";
             home-manager.users.ogryson = import ./home.nix;
             home-manager.extraSpecialArgs = { inherit inputs; };

@@ -456,8 +456,15 @@ in
   # default is written for Sway (sway/workspaces) and its battery line uses a
   # loose Font Awesome glyph, which renders as an empty box. Everything below
   # sticks to Nerd Font glyphs that exist in JetBrainsMono Nerd Font.
+  #
+  # waybar 0.15.0 crashes (SIGSEGV) in the GTK Gdk::Monitor add/remove handler
+  # when a monitor is hotplugged, and its battery module can wedge in a kernel
+  # ACPI read on the dock's power event. Either way the process dies or hangs
+  # and `exec-once` never relaunches it. Running it as a user service with
+  # Restart=on-failure brings the bar back automatically.
   programs.waybar = {
     enable = true;
+    systemd.enable = true;
     settings.mainBar = {
       layer = "top";
       position = "top";

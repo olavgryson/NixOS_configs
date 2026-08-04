@@ -11,23 +11,23 @@
     opencode                           # AI coding agent, terminal
     github-copilot-cli                 # GitHub Copilot, terminal
     antigravity-cli                    # Google Antigravity, terminal (Go TUI agent client)
-    # gemini-cli: removed. Google cut this client off from Gemini Code Assist for
-    # individuals — "Sign in with Google" now fails and points at Antigravity.
+    # gemini-cli: removed. Google cut this client off from Gemini Code Assist
+    # for individuals — "Sign in with Google" fails and points at Antigravity.
     # Only a paid Gemini API key or Vertex AI still authenticates, so it buys
     # nothing over antigravity-cli above.
 
     ## --- browsers ---
     firefox
-    chromium                                              # kept: drives the web-app launchers (--app=)
+    chromium                                              # drives the web-app launchers (--app=)
     librewolf                                             # extra hardened Firefox fork
-    inputs.zen-browser.packages.${pkgs.system}.default    # Zen (replaces Brave)
+    inputs.zen-browser.packages.${pkgs.system}.default    # Zen
 
     ## --- dev tooling ---
     gh lazygit
     nodejs_22 corepack_22 bun
     python313 uv
-    # pipx 1.14.0's testsuite is stuk met de nieuwe pytest (parametrize-signatuur);
-    # de tool zelf werkt prima, dus we bouwen 'm met tests uit.
+    # pipx 1.14.0's test suite is broken against the new pytest (parametrize
+    # signature); the tool itself works, so build it with tests disabled.
     (pipx.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
@@ -38,13 +38,13 @@
     neovim
     jetbrains.idea-oss                 # IntelliJ IDEA (open-source build; idea-community discontinued)
     tmux
-    antigravity-ide                    # Google's AI editor — now in nixpkgs, no more manual packaging
+    antigravity-ide                    # Google's AI editor
 
-    ## --- terminal / CLI tools (detected on your Debian box) ---
+    ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq
     htop btop fastfetch fetch ncdu
     gocryptfs sshfs                    # encrypted FUSE fs + remote ssh mounts
-    gnupg pass                         # GnuPG + password-store (your password manager)
+    gnupg pass                         # GnuPG + password-store
     nmap                               # network scanner (CLI)
     imagemagick pandoc                 # image convert + document convert
     unzip zip p7zip tree file wget curl rsync
@@ -53,31 +53,31 @@
     obsidian
     discord
     spotify
-    vlc                                # mpv staat niet hier: zie programs.mpv onderaan
+    vlc                                # mpv is not here: see programs.mpv below
     obs-studio
     libreoffice-fresh hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
-    angryipscanner                     # network scanner GUI (was Flatpak)
+    angryipscanner                     # network scanner GUI
     handy                              # local Whisper push-to-talk dictation, fully offline
     upscayl                            # AI image upscaler GUI
 
     ## --- creative / 3D / making ---
     blender
-    # TIJDELIJK UITGEZET (compileren van bron in deze verse unstable-snapshot,
-    # nog niet gecached -> te traag/OOM). Later terugzetten met één nixos-rebuild,
-    # of wanneer de binary cache is bijgewerkt. Alternatief voor bambu: orca-slicer.
+    # DISABLED: not in the binary cache on the current unstable snapshot, so
+    # they compile from source (too slow / OOM). Re-enable with one rebuild once
+    # the cache has caught up. Alternative for bambu-studio: orca-slicer.
     # krita
-    # bambu-studio                     # Bambu Lab 3D-printer slicer
+    # bambu-studio                     # Bambu Lab 3D printer slicer
 
     ## --- wine / gaming extras ---
-    # wineWowPackages.stable           # TIJDELIJK UITGEZET (bron-compile, zie boven)
+    # wineWowPackages.stable           # DISABLED: source compile, see above
     winetricks
   ];
 
-  ## --- mpv: hardware video decoding op de Iris Xe (VAAPI/iHD) ---------------
-  #  mpv's default is hwdec=no, dus 1080p HEVC werd volledig op de CPU gedecodeerd
-  #  (~43% van een core i.p.v. ~17%). auto-safe kiest vaapi en valt netjes terug
-  #  als dat ooit niet beschikbaar is. Installeert mpv zelf, vandaar niet in
-  #  home.packages hierboven (anders botsen de twee in het profiel).
+  ## --- mpv: hardware video decoding on the Iris Xe (VAAPI/iHD) -------------
+  #  mpv defaults to hwdec=no, so 1080p HEVC was decoded entirely on the CPU
+  #  (~43% of a core instead of ~17%). auto-safe picks vaapi and falls back
+  #  cleanly if it is ever unavailable. This installs mpv itself, which is why
+  #  it is not in home.packages above (the two would collide in the profile).
   programs.mpv = {
     enable = true;
     config = {

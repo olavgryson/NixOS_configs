@@ -1,19 +1,19 @@
 ################################################################################
-#  Eén wallpaper voor loginscherm (greetd/ReGreet + hyprpaper), desktop
-#  (hyprpaper) en lockscherm (hyprlock). Geïmporteerd door ./greeter.nix en
-#  ./home/desktop.nix, zodat alle drie gegarandeerd dezelfde afbeelding tonen.
+#  One wallpaper for the login screen (greetd/ReGreet + hyprpaper), the desktop
+#  (hyprpaper) and the lock screen (hyprlock). Imported by ./greeter.nix and
+#  ./home/desktop.nix, so all three are guaranteed to show the same image.
 #
-#  De bijbehorende kleuren staan in ./theme.nix — die zijn uit déze afbeelding
-#  bemonsterd. Wissel je de wallpaper, herbemonster dan ook dat bestand.
+#  The matching colours live in ./theme.nix — they were sampled from THIS
+#  image. Swap the wallpaper and you should resample that file too.
 #
-#  EIGEN WALLPAPER GEBRUIKEN
-#  -------------------------
-#  Zet je afbeelding in ./wallpapers/ en git add hem — anders ziet de flake hem
-#  niet, want flakes kopiëren alleen getrackte bestanden naar de store — en pas
-#  `src` hieronder aan.
+#  USING YOUR OWN WALLPAPER
+#  ------------------------
+#  Put the image in ./wallpapers/ and `git add` it — otherwise the flake does
+#  not see it, since flakes only copy tracked files into the store — then point
+#  `src` below at it.
 #
-#  Belangrijk: het pad moet in de nix-store belanden, want het loginscherm
-#  draait als gebruiker `greeter` en kan niets in /home/ogryson lezen.
+#  Important: the path has to end up in the nix store, because the login screen
+#  runs as user `greeter` and cannot read anything under /home/ogryson.
 #
 #  ONE SIZE PER SCREEN
 #  -------------------

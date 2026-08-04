@@ -32,6 +32,11 @@ let
     # first frame up before the compositor is frozen mid-repaint.
     sleep 0.5
   '';
+
+  # Reads the AC line (1 = charger plugged). Exits 0 when on AC power.
+  onAc = pkgs.writeShellScript "on-ac" ''
+    [ "$(${pkgs.coreutils}/bin/cat /sys/class/power_supply/AC/online)" = "1" ]
+  '';
 in
 {
   services.hypridle = {
@@ -48,7 +53,10 @@ in
         after_sleep_cmd = "hyprctl dispatch dpms on";
       };
       listener = [
-        { timeout = 300;  on-timeout = "loginctl lock-session"; }
+        # Skip lock and suspend while on AC power, so a long-running command
+        # left unattended on the desk cannot stall behind a sleep/lock.
+        # `/sys/class/power_supply/AC/online` is 1 when the charger is plugged.
+        { timeout = 300;  on-timeout = "${onAc} || loginctl lock-session"; }
         # Plain suspend, NOT suspend-then-hibernate. Hibernation is broken on
         # this hardware: the kernel snapshots memory fine and then a driver
         # fails to come back during the snapshot's resume phase
@@ -62,7 +70,7 @@ in
         # 2026-07-30 with HibernateMode=shutdown too, so it is not the ACPI S4
         # path: /sys/power/disk showed `platform [shutdown]` and it still
         # aborted, boot id unchanged, 0B written to swap.
-        { timeout = 900;  on-timeout = "systemctl suspend"; }
+        { timeout = 900;  on-timeout = "${onAc} || systemctl suspend"; }
       ];
     };
   };

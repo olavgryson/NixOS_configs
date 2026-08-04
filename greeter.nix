@@ -1,32 +1,33 @@
 ################################################################################
-#  Loginscherm: greetd + ReGreet, draaiend ín een kale Hyprland met hyprpaper.
+#  Login screen: greetd + ReGreet, running inside a bare Hyprland with
+#  hyprpaper.
 #
-#  WAAROM NIET MEER SDDM
-#  ---------------------
-#  SDDM's Wayland-greeter draait onder `weston --shell=kiosk`. Weston pikte de
-#  I2C-HID Synaptics touchpad (SYNA310F:00) van deze laptop niet op — vandaar
-#  dat je een externe muis nodig had op het loginscherm, terwijl dezelfde
-#  touchpad in Hyprland wél werkt. Door de greeter in Hyprland zelf te draaien
-#  gebruikt het loginscherm exact dezelfde libinput-stack als je desktop.
+#  WHY NOT SDDM
+#  ------------
+#  SDDM's Wayland greeter runs under `weston --shell=kiosk`, and weston does not
+#  pick up this laptop's I2C-HID Synaptics touchpad (SYNA310F:00) — which is why
+#  the login screen needed an external mouse while the same touchpad works fine
+#  in Hyprland. Running the greeter inside Hyprland means the login screen uses
+#  exactly the same libinput stack as the desktop session.
 #
-#  WAAROM JE "Reached target Graphical Interface" ZAG
-#  --------------------------------------------------
-#  De hyprland-package levert TWEE sessiebestanden:
-#      hyprland.desktop        -> start-hyprland          (werkt)
-#      hyprland-uwsm.desktop   -> uwsm start -e -D ...    (werkt NIET)
-#  Die tweede vereist `programs.uwsm.enable = true`, wat alleen aangaat via
-#  `programs.hyprland.withUWSM = true` (default: uit). Stond die uit, dan viel
-#  `uwsm` weg, stierf de sessie binnen een seconde, en viel je terug op VT1 —
-#  waar de laatste console-regel "Reached target Graphical Interface" staat.
-#  SDDM onthield bovendien je laatste keuze, dus het bleef mislukken.
-#  Hieronder bieden we daarom uitsluitend de wérkende sessie aan.
+#  WHY THE SESSION USED TO DIE ON "Reached target Graphical Interface"
+#  -------------------------------------------------------------------
+#  The hyprland package ships TWO session files:
+#      hyprland.desktop        -> start-hyprland          (works)
+#      hyprland-uwsm.desktop   -> uwsm start -e -D ...    (does NOT work)
+#  The second requires `programs.uwsm.enable = true`, which only comes on via
+#  `programs.hyprland.withUWSM = true` (default: off). With it off, `uwsm` is
+#  missing, the session dies within a second and you land back on VT1 — where
+#  "Reached target Graphical Interface" is the last console line. A display
+#  manager that remembers your last choice then keeps failing. So only the
+#  working session is offered below.
 ################################################################################
 { config, pkgs, lib, ... }:
 
 let
   wallpaper = import ./wallpaper.nix { inherit pkgs; };
-  # Ook het loginscherm krijgt de ultrawide-render, anders zit je bij het
-  # inloggen naar hetzelfde opgeblazen beeld te kijken als op de desktop.
+  # The login screen gets the ultrawide render too, otherwise hyprpaper blows
+  # the laptop-sized image up to cover it and login looks zoomed in and blurry.
   wallpaperUltrawide = import ./wallpaper.nix {
     inherit pkgs;
     width = 3440;
@@ -43,8 +44,8 @@ let
 
   hyprland = config.programs.hyprland.package;
 
-  # Alleen hyprland.desktop doorgeven aan de display manager; de kapotte
-  # uwsm-variant filteren we eruit zodat je hem niet meer kúnt kiezen.
+  # Hand only hyprland.desktop to the display manager; the broken uwsm variant
+  # is filtered out so it cannot be selected.
   hyprlandSession =
     pkgs.runCommand "hyprland-session"
       {
@@ -56,13 +57,13 @@ let
            $out/share/wayland-sessions/hyprland.desktop
       '';
 
-  # hyprpaper voor de greeter-gebruiker. Het pad wijst naar de nix-store,
-  # want `greeter` heeft geen toegang tot /home/ogryson.
-  # Syntax van hyprpaper 0.8.x — zie de uitleg bij services.hyprpaper in
-  # ./home/desktop.nix. De oude `preload`/`wallpaper = ,pad`-vorm wordt
-  # zwijgend genegeerd, dus daarmee bleef ook het loginscherm leeg.
-  # Zelfde opzet als services.hyprpaper in ./home/desktop.nix: eerst de schermen
-  # die we kennen met hun eigen render, dan een lege monitor-regel als vangnet.
+  # hyprpaper for the greeter user. The path points into the nix store, because
+  # `greeter` has no access to /home/ogryson.
+  # hyprpaper 0.8.x syntax — see the note at services.hyprpaper in
+  # ./home/desktop.nix. The old `preload`/`wallpaper = ,path` form is silently
+  # ignored, which leaves the login screen blank.
+  # Same layout as services.hyprpaper in ./home/desktop.nix: first the screens
+  # we know with their own render, then an empty monitor line as a fallback.
   greeterHyprpaperConf = pkgs.writeText "greeter-hyprpaper.conf" ''
     splash = false
 
@@ -134,9 +135,9 @@ let
     ${lib.getExe' hyprland "hyprctl"} dispatch exit
   '';
 
-  # Kale Hyprland als greeter-compositor: geen animaties, geen logo, geen
-  # keybinds. Start hyprpaper voor de achtergrond en ReGreet voor het
-  # loginveld; zodra ReGreet afsluit stopt de compositor en herstart greetd.
+  # Bare Hyprland as the greeter compositor: no animations, no logo, no
+  # keybinds. It starts hyprpaper for the background and ReGreet for the login
+  # field; once ReGreet exits the compositor stops and greetd restarts.
   greeterHyprlandConf = pkgs.writeText "greeter-hyprland.conf" ''
     monitor = ,preferred,auto,1
 
@@ -191,10 +192,10 @@ let
     exec-once = ${greeterStartup}
   '';
 
-  # ReGreet zoekt sessiebestanden in $XDG_DATA_DIRS/{wayland-sessions,xsessions}
-  # en valt anders terug op /usr/share/... — dat bestaat niet op NixOS, dus dan
-  # is de sessie-dropdown leeg en kun je niet inloggen. We wijzen daarom
-  # expliciet naar het pad dat de displayManager-module samenstelt.
+  # ReGreet looks for session files in $XDG_DATA_DIRS/{wayland-sessions,
+  # xsessions} and otherwise falls back to /usr/share/... — which does not exist
+  # on NixOS, leaving the session dropdown empty and login impossible. So point
+  # it explicitly at the path the displayManager module assembles.
   # Launch through `start-hyprland` rather than the `Hyprland` binary directly.
   # Hyprland 0.56 paints a "Hyprland was started without start-hyprland" warning
   # over the screen when it is exec'd directly, which used to be the first
@@ -209,12 +210,11 @@ let
   '';
 in
 {
-  #### SDDM uitzetten ##########################################################
-  # mkForce omdat configuration.nix historisch sddm aanzette; laat die regels
-  # daar gerust staan of haal ze weg — deze wint hoe dan ook.
+  #### Keep SDDM off ###########################################################
+  # mkForce so that this wins no matter what else in the tree enables it.
   services.displayManager.sddm.enable = lib.mkForce false;
 
-  #### Alleen de werkende Hyprland-sessie aanbieden ###########################
+  #### Offer only the working Hyprland session ################################
   services.displayManager.sessionPackages = lib.mkForce [ hyprlandSession ];
 
   #### ReGreet #################################################################
@@ -229,8 +229,8 @@ in
       name = "Adwaita";
       package = pkgs.adwaita-icon-theme;
     };
-    # Zelfde cursor als in de sessie (home/desktop.nix), zodat de pijl niet
-    # verspringt op het moment dat je inlogt.
+    # Same cursor as the session (home/desktop.nix), so the pointer does not
+    # jump the moment you log in.
     cursorTheme = {
       name = "capitaine-cursors";
       package = pkgs.capitaine-cursors;
@@ -244,20 +244,19 @@ in
     settings = {
       GTK.application_prefer_dark_theme = true;
 
-      # ReGreet tekent de achtergrond óók zelf. hyprpaper hierboven doet het
-      # eigenlijke werk; dit is de vangnet-laag voor als het GTK-venster niet
-      # doorschijnend blijkt te zijn. Zelfde bestand, dus je ziet hoe dan ook
-      # exact dezelfde wallpaper.
+      # ReGreet draws the background itself as well. hyprpaper above does the
+      # real work; this is the fallback layer for when the GTK window turns out
+      # not to be translucent. Same file, so the wallpaper matches either way.
       background = {
         path = "${wallpaper}";
         fit = "Cover";
       };
     };
 
-    # Let op: ReGreet 0.4 bouwt zijn UI programmatisch op (relm4, geen .ui-
-    # templates), dus er zijn géén stabiele id-selectors zoals #main-box.
-    # Alleen generieke GTK4-nodes hieronder — die matchen gegarandeerd.
-    # Kleuren uit ./theme.nix, hetzelfde palet als waybar/mako/hyprlock.
+    # Note: ReGreet 0.4 builds its UI programmatically (relm4, no .ui
+    # templates), so there are no stable id selectors such as #main-box. Only
+    # generic GTK4 nodes below — those are guaranteed to match.
+    # Colours come from ./theme.nix, the same palette as waybar/mako/hyprlock.
     extraCss = ''
       window {
         background-color: alpha(#${raw.ink}, 0.45);
@@ -283,11 +282,11 @@ in
     '';
   };
 
-  #### greetd: ReGreet in Hyprland i.p.v. de standaard `cage` #################
-  # De regreet-module zet dit met mkDefault, dus een gewone toewijzing wint.
+  #### greetd: ReGreet in Hyprland instead of the default `cage` ##############
+  # The regreet module sets this with mkDefault, so a plain assignment wins.
   services.greetd.settings.default_session.command = "${greeterLauncher}";
 
-  # Hyprland heeft in de greeter-sessie toegang tot GPU en input nodig.
+  # In the greeter session Hyprland needs access to the GPU and to input.
   users.users.greeter.extraGroups = [
     "video"
     "input"

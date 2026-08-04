@@ -27,5 +27,17 @@
     nwg-look               # GTK theme settings
     papirus-icon-theme     # icons for rofi's app list (icon-theme below)
     polkit_gnome           # auth agent
+    viewnior               # image viewer: arrows scroll through the folder's
+                           # images out of the box, no config needed
   ];
+
+  # Open images in the viewer, not the browser (browser can't page through a folder).
+  xdg.mimeApps.defaultApplications = {
+    "image/jpeg" = "viewnior.desktop";
+    "image/png" = "viewnior.desktop";
+    "image/gif" = "viewnior.desktop";
+    "image/webp" = "viewnior.desktop";
+    "image/bmp" = "viewnior.desktop";
+    "image/svg+xml" = "viewnior.desktop";
+  };
 }

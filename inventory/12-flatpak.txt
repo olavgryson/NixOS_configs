@@ -1,4 +1,0 @@
-com.github.dynobo.normcap	NormCap
-com.mojang.Minecraft	Minecraft
-com.protonvpn.www	Proton VPN
-org.angryip.ipscan	Angry IP Scanner

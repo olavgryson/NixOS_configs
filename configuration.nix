@@ -1,17 +1,16 @@
 ################################################################################
 #  System configuration for dragonflyg4 (HP Dragonfly G4)
-#  Rebuilt from Debian 13 inventory — see ./inventory/ and ./README.md
 ################################################################################
 { config, pkgs, lib, inputs, ... }:
 
 let
-  # Eén vaste, argumentloze opdracht voor de rebuild. Bewust een script en geen
-  # sudoers-regel met losse argumenten, om twee redenen:
-  #   1. Een sudoers-regel als `nixos-rebuild switch --flake /pad#dragonflyg4`
-  #      werkt niet: in sudoers begint '#' een commentaar, dus de flake-attribuut
-  #      zou stilzwijgend wegvallen en de regel matcht dan nooit.
-  #   2. Zonder argumenten valt er niets te variëren — geen ander flake-pad,
-  #      geen andere subopdracht dan `switch`.
+  # One fixed, argument-less rebuild command. Deliberately a script rather than
+  # a sudoers rule with loose arguments, for two reasons:
+  #   1. A sudoers rule like `nixos-rebuild switch --flake /path#dragonflyg4`
+  #      does not work: '#' starts a comment in sudoers, so the flake attribute
+  #      would silently disappear and the rule would never match.
+  #   2. With no arguments there is nothing to vary — no other flake path, no
+  #      subcommand other than `switch`.
   nixosRebuildSwitch = pkgs.writeShellScript "nixos-rebuild-switch" ''
     exec /run/current-system/sw/bin/nixos-rebuild switch \
       --flake /home/ogryson/nixos-config#dragonflyg4
@@ -20,7 +19,7 @@ in
 
 {
   imports = [
-    ./greeter.nix   # loginscherm: greetd + ReGreet in Hyprland (verving SDDM)
+    ./greeter.nix   # login screen: greetd + ReGreet inside Hyprland
   ];
 
   #### Boot / firmware ########################################################
@@ -34,8 +33,8 @@ in
   nix.settings.auto-optimise-store = true;
   nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 30d"; };
   nixpkgs.config.allowUnfree = true;   # spotify, vscode, discord, steam, obsidian...
-  # IntelliJ IDEA (idea-oss) wordt als insecure gemarkeerd wegens een CVE in de
-  # gebundelde JetBrains-runtime. Toegestaan op naam (versie-onafhankelijk).
+  # IntelliJ IDEA (idea-oss) is flagged insecure over a CVE in the bundled
+  # JetBrains runtime. Allowed by name, so it survives version bumps.
   nixpkgs.config.allowInsecurePredicate = pkg:
     builtins.elem (lib.getName pkg) [ "idea-oss" ];
 
@@ -52,7 +51,7 @@ in
   services.xserver.xkb = { layout = "be"; model = "pc105"; };
 
   #### Networking #############################################################
-  networking.networkmanager.enable = true;   # 23 saved WiFi nets — rejoin via nmtui or restore from backup (see README)
+  networking.networkmanager.enable = true;
   services.tailscale.enable = true;
 
   #### Graphics (Intel Iris Xe / Raptor Lake) #################################
@@ -66,7 +65,7 @@ in
   };
   environment.sessionVariables.LIBVA_DRIVER_NAME = "iHD";
 
-  #### Audio (PipeWire, like current setup) ###################################
+  #### Audio (PipeWire) #######################################################
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -81,18 +80,18 @@ in
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
 
-  # blueman stond alléén in home.packages. Dat levert de GUI, maar niet de
-  # systeemkant: blueman-mechanism (de D-Bus system service) en de polkit-regels.
-  # Zonder die twee mag blueman-manager de adapter niet aanzetten, niet
-  # rfkill-unblocken en geen scan starten — vandaar "ik vind geen apparaten".
+  # blueman in home.packages alone gives you the GUI but not the system side:
+  # blueman-mechanism (the D-Bus system service) and its polkit rules. Without
+  # those two, blueman-manager may not power the adapter on, may not
+  # rfkill-unblock and cannot start a scan — the "no devices found" symptom.
   services.blueman.enable = true;
 
-  # systemd-rfkill bewaart de blokkeerstand in /var/lib/systemd/rfkill/ en zet
-  # die bij elke boot terug. Eén druk op de vliegtuigstand-toets blokkeert
-  # bluetooth dus permanent; powerOnBoot hierboven kan daar niets tegen doen,
-  # want dat zet alleen de adapter aan en heft de rfkill-blokkade niet op.
+  # systemd-rfkill persists the block state in /var/lib/systemd/rfkill/ and
+  # restores it on every boot. So one press of the airplane-mode key blocks
+  # bluetooth permanently; powerOnBoot above cannot undo that, since it only
+  # powers the adapter on and does not lift the rfkill block.
   systemd.services.bluetooth-rfkill-unblock = {
-    description = "Bluetooth rfkill-blokkade opheffen na boot";
+    description = "Lift the bluetooth rfkill block after boot";
     wantedBy = [ "multi-user.target" ];
     after = [ "systemd-rfkill.service" "bluetooth.service" ];
     serviceConfig = {
@@ -108,14 +107,13 @@ in
     drivers = with pkgs; [ brlaser brgenml1lpr gutenprint cups-filters ];
   };
   services.avahi = { enable = true; nssmdns4 = true; openFirewall = true; };  # network printer discovery
-  hardware.sane.enable = true;   # scanner; Brother USB scan may need brscan5 (see README note)
+  hardware.sane.enable = true;   # scanner; Brother USB scan may need brscan5
 
   #### Desktop: Hyprland (Wayland) ############################################
   programs.hyprland.enable = true;          # sets up portals + session
   programs.hyprland.xwayland.enable = true; # X11 app compatibility
-  # Loginscherm zit in ./greeter.nix (greetd + ReGreet). SDDM is eruit: zijn
-  # weston-greeter zag de touchpad niet, en hij bood een kapotte uwsm-sessie aan.
-  # LAAT withUWSM UIT tenzij je ./greeter.nix ook aanpast — zie de uitleg daar.
+  # The login screen lives in ./greeter.nix (greetd + ReGreet).
+  # LEAVE withUWSM OFF unless you adapt ./greeter.nix too — see the note there.
 
   xdg.portal = {
     enable = true;
@@ -127,11 +125,11 @@ in
   services.gnome.gnome-keyring.enable = true;
   programs.dconf.enable = true;
 
-  # SwayOSD (de volume-/helderheidspopup, zie home/desktop.nix) schrijft
-  # helderheid rechtstreeks naar /sys/class/backlight — dat is root-only tot
-  # deze udev-regel de knop chgrp't naar `video`. brightnessctl had dit niet
-  # nodig omdat die via logind D-Bus gaat; swayosd doet dat niet.
-  # `video` staat al in extraGroups hieronder.
+  # SwayOSD (the volume/brightness popup, see home/desktop.nix) writes
+  # brightness straight to /sys/class/backlight — root-only until this udev
+  # rule chgrps the knob to `video`. brightnessctl did not need this because it
+  # goes through logind over D-Bus; swayosd does not.
+  # `video` is already in extraGroups below.
   services.udev.packages = [ pkgs.swayosd ];
 
   # Brightness on the EXTERNAL screen travels a completely different path than the
@@ -153,7 +151,7 @@ in
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
-  services.ollama.enable = true;   # geen modellen auto-pullen; later handmatig indien gewenst
+  services.ollama.enable = true;   # no models auto-pulled; pull manually when needed
 
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
@@ -161,8 +159,8 @@ in
 
   #### Swap + hibernate #######################################################
   # zram = fast compressed RAM swap for daily use.
-  # The on-disk SWAP partition (>= RAM, see README partitioning) is the
-  # hibernate image target.
+  # The on-disk SWAP partition (>= RAM, see README) is the hibernate image
+  # target.
   zramSwap.enable = true;
   boot.resumeDevice = "/dev/disk/by-label/SWAP";
   # swapDevices for the SWAP partition is normally written by
@@ -286,7 +284,7 @@ in
   services.udisks2.enable = true;
   services.gvfs.enable = true;
 
-  #### Externe backup-schijf ##################################################
+  #### External backup disk ###################################################
   # Kingston SV300S37A240G, 240G, ext4, label `backup`.
   #
   # Mounted on demand instead of at boot. With a plain `nofail` +
@@ -322,8 +320,8 @@ in
     isNormalUser = true;
     description = "Olav Gryson";
     shell = pkgs.bash;
-    # TIJDELIJK — wijzig na de eerste boot met `passwd`. Root blijft geblokkeerd
-    # (install met --no-root-passwd); beheer gebeurt via sudo (groep wheel).
+    # TEMPORARY — change on first boot with `passwd`. Root stays locked
+    # (install with --no-root-passwd); administration goes through sudo (wheel).
     initialPassword = "changeme";
     extraGroups = [
       "wheel"          # sudo
@@ -336,12 +334,12 @@ in
     ];
   };
 
-  # Wachtwoordloze sudo voor precies één opdracht: bovenstaand rebuild-script.
-  # Al het andere blijft gewoon om een wachtwoord vragen (wheel).
-  # LET OP: dit script bouwt uit /home/ogryson/nixos-config, en die map is door
-  # jouw gebruiker beschrijfbaar. Wie in die map kan schrijven, kan dus via deze
-  # regel willekeurige code als root laten draaien. In de praktijk is dit dus
-  # geen "alleen rebuild"-recht maar volledige root zonder wachtwoord.
+  # Passwordless sudo for exactly one command: the rebuild script above.
+  # Everything else still asks for a password (wheel).
+  # WARNING: that script builds from /home/ogryson/nixos-config, a directory the
+  # user can write to. Anyone who can write there can therefore run arbitrary
+  # code as root through this rule. In practice this is not a "rebuild only"
+  # privilege but full passwordless root.
   security.sudo.extraRules = [
     {
       users = [ "ogryson" ];
@@ -360,7 +358,7 @@ in
     pciutils usbutils
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
-    # Korte naam voor de wachtwoordloze rebuild-opdracht hierboven.
+    # Short name for the passwordless rebuild command above.
     (writeShellScriptBin "rebuild" ''
       exec sudo ${nixosRebuildSwitch}
     '')

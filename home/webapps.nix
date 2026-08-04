@@ -1,7 +1,6 @@
 ################################################################################
-#  Web apps (PWAs) — recreated declaratively as browser --app launchers.
-#  These were Chromium/Brave "installed web apps" on your Debian box; here they
-#  become proper .desktop entries that show up in wofi.
+#  Web apps (PWAs) — declared as browser --app launchers, which become proper
+#  .desktop entries that show up in wofi.
 #  Uses Chromium (Zen/Firefox have no clean --app chromeless mode).
 ################################################################################
 { pkgs, ... }:

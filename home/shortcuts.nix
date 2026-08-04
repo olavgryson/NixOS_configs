@@ -1,8 +1,9 @@
 ################################################################################
 #  Hyprland keyboard & mouse shortcuts (keybindings).
 ################################################################################
-{ pkgs, lib, ... }:
+{ pkgs, lib, config, ... }:
 let
+  homeDir = config.home.homeDirectory;
   # Lid closed: turn the laptop panel off, BUT only if another screen remains.
   # Without that check, closing the lid on the road would switch off your only
   # screen and leave you in the dark with a running session. `hyprctl monitors`
@@ -62,8 +63,8 @@ let
     fi
   '';
 
-  # Screenshot van het actieve venster. Als los script omdat de geometrie een
-  # komma bevat ("x,y BxH") en Hyprland zijn bind-regels op komma's splitst.
+  # Screenshot of the active window. A separate script because the geometry
+  # contains a comma ("x,y WxH") and Hyprland splits bind lines on commas.
   screenshotWindow = pkgs.writeShellScript "screenshot-window" ''
     geom=$(hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')
     grim -g "$geom" - | swappy -f -
@@ -136,50 +137,66 @@ let
 
     ${pkgs.libnotify}/bin/notify-send -h string:x-canonical-private-synchronous:brightness -h int:value:"''${val:-0}" -a "Brightness" "Brightness" "<b>''${val:-0}%</b>" -i display-brightness
   '';
+
+  # Cycles the power profile performance -> balanced -> power-saver and wraps
+  # around. The waybar `power-profiles-daemon` module follows via DBus, so no
+  # signal is needed; the notification is so the switch is visible without the
+  # bar.
+  cyclePowerProfile = pkgs.writeShellScript "cycle-power-profile" ''
+    set -eu
+    current=$(${pkgs.power-profiles-daemon}/bin/powerprofilesctl get)
+    case "$current" in
+      power-saver) next="balanced" ;;
+      balanced)    next="performance" ;;
+      *)           next="power-saver" ;;
+    esac
+    ${pkgs.power-profiles-daemon}/bin/powerprofilesctl set "$next"
+    ${pkgs.libnotify}/bin/notify-send -a "Power Profile" "Power Profile" "<b>$next</b>"
+  '';
 in
 {
   wayland.windowManager.hyprland.settings = {
     # Runs on startup AND on every config reload — see the lidSync comment above.
     exec = [ "${lidSync}" ];
 
-    # ── Modifier-schema, zodat je het kunt onthouden zonder spiekbriefje ──
-    #   $mod              + pijl  = focus verplaatsen
-    #   $mod SHIFT        + pijl  = venster verplaatsen (of in een tabgroep)
-    #   $mod CTRL         + pijl  = workspace vooruit/achteruit
-    #   $mod ALT          + pijl  = tab wisselen bínnen een groep
-    #   $mod CTRL SHIFT   + pijl  = venster van formaat veranderen
+    # ── Modifier scheme, memorable without a cheat sheet ──────────────────
+    #   $mod              + arrow = move focus
+    #   $mod SHIFT        + arrow = move window (or into a tab group)
+    #   $mod CTRL         + arrow = workspace forward/back
+    #   $mod ALT          + arrow = switch tab within a group
+    #   $mod CTRL SHIFT   + arrow = resize window
     bind = [
-      # ── Programma's ────────────────────────────────────────────────────
+      # ── Applications ───────────────────────────────────────────────────
       "$mod, Return, exec, $term"
       "$mod SHIFT, Return, exec, [float; size 900 600] $term"
       "$mod, E, exec, $files"
-      # Programmastarter staat op $mod+Space (was $mod+R, en was wofi).
+      # App launcher on $mod+Space.
       "$mod, Space, exec, $menu"
       "$mod SHIFT, R, exec, wofi --show run"
       "$mod, B, exec, $browser"      # Zen browser
-      "$mod SHIFT, B, exec, $browser --private-window" # Zen browser (private window)
+      "$mod SHIFT, B, exec, ${cyclePowerProfile}" # cycle power profile
       "$mod SHIFT, P, exec, $browser --private-window" # Zen browser (private window)
       "$mod, L, exec, hyprlock"
       "$mod, V, exec, cliphist list | wofi --dmenu | cliphist decode | wl-copy"
-      # Afmelden zat op $mod+M. Op AZERTY ligt M pal naast L, dus één toets
-      # mis bij $mod+L (vergrendelen) gooide je hele sessie weg. Nu met SHIFT.
+      # Log out. Deliberately on SHIFT: on AZERTY, M sits right next to L, so
+      # a single missed key on $mod+L (lock) would throw away the session.
       "$mod SHIFT, M, exit,"
 
-      # ── Vensters ───────────────────────────────────────────────────────
+      # ── Windows ────────────────────────────────────────────────────────
       "$mod, W, killactive,"
-      "$mod SHIFT, W, forcekillactive,"   # voor een vastgelopen venster
+      "$mod SHIFT, W, forcekillactive,"   # for a hung window
       "$mod, R, togglefloating,"
       "$mod, C, centerwindow,"
-      "$mod, F, fullscreen, 0"            # echt volledig scherm
-      "$mod SHIFT, F, fullscreen, 1"      # maximaliseren, waybar blijft zichtbaar
-      # Splitsrichting omdraaien is in dwindle géén dispatcher maar een
-      # layoutmsg — "togglesplit" als dispatcher bestaat niet.
+      "$mod, F, fullscreen, 0"            # true fullscreen
+      "$mod SHIFT, F, fullscreen, 1"      # maximise, waybar stays visible
+      # Flipping the split direction is a layoutmsg in dwindle, not a
+      # dispatcher — "togglesplit" as a dispatcher does not exist.
       "$mod, X, layoutmsg, togglesplit"
       "$mod, P, pseudo,"
 
-      # ── Tabs (Hyprland noemt dit groepen) ──────────────────────────────
-      # $mod+G maakt van het huidige venster een tabgroep; sleep er daarna
-      # vensters in met $mod SHIFT + pijl.
+      # ── Tabs (Hyprland calls these groups) ─────────────────────────────
+      # $mod+G turns the current window into a tab group; drag windows into it
+      # afterwards with $mod SHIFT + arrow.
       "$mod, G, togglegroup,"
       "$mod ALT, right, changegroupactive, f"
       "$mod ALT, left, changegroupactive, b"
@@ -190,9 +207,9 @@ in
       "$mod, up, movefocus, u"
       "$mod, down, movefocus, d"
 
-      # ── Venster verplaatsen ────────────────────────────────────────────
-      # movewindoworgroup i.p.v. movewindow: schuift het venster op, maar
-      # laat het ín een tabgroep vallen als de buurman er een is.
+      # ── Move window ────────────────────────────────────────────────────
+      # movewindoworgroup instead of movewindow: moves the window across, but
+      # drops it into a tab group if the neighbour is one.
       "$mod SHIFT, left, movewindoworgroup, l"
       "$mod SHIFT, right, movewindoworgroup, r"
       "$mod SHIFT, up, movewindoworgroup, u"
@@ -201,29 +218,39 @@ in
       # ── Workspaces ─────────────────────────────────────────────────────
       "$mod CTRL, right, workspace, e+1"
       "$mod CTRL, left, workspace, e-1"
-      "$mod, Tab, workspace, previous"          # heen en weer springen
-      "$mod, mouse_down, workspace, e+1"        # $mod + scrollen
+      "$mod CTRL SHIFT, right, movetoworkspace, e+1"  # Move window to next workspace
+      "$mod CTRL SHIFT, left, movetoworkspace, e-1"   # Move window to previous workspace
+      "$mod, Tab, workspace, previous"          # jump back and forth
+      "$mod, mouse_down, workspace, e+1"        # $mod + scroll
       "$mod, mouse_up, workspace, e-1"
-      # Nieuwe, lege workspace — en hetzelfde mét het huidige venster erbij.
+      # New empty workspace — and the same, taking the current window along.
       "$mod, N, workspace, empty"
       "$mod SHIFT, N, movetoworkspace, empty"
-      # Scratchpad: één workspace die je over alles heen in/uit klapt.
+      # Scratchpad: one workspace that folds in and out over everything else.
       "$mod, S, togglespecialworkspace, magic"
       "$mod SHIFT, S, movetoworkspace, special:magic"
 
       # ── Screenshots ────────────────────────────────────────────────────
-      ", Print, exec, grim -g \"$(slurp)\" - | swappy -f -"   # selectie -> bewerken
-      "$mod, Print, exec, ${screenshotWindow}"                # actief venster
-      "CTRL, Print, exec, grim -g \"$(slurp)\" - | wl-copy"   # selectie -> klembord
-      "SHIFT, Print, exec, grim - | wl-copy"                  # heel scherm -> klembord
+      ", Print, exec, grim -g \"$(slurp)\" - | swappy -f -"   # selection -> edit
+      "$mod, Print, exec, ${screenshotWindow}"                # active window
+      "CTRL, Print, exec, grim -g \"$(slurp)\" - | wl-copy"   # selection -> clipboard
+      "SHIFT, Print, exec, grim - | wl-copy"                  # whole screen -> clipboard
+
+      # ── Voice dictation (fully local) ──────────────────────────────────
+      # Vosk (streaming): $mod+F5 starts, $mod+F6 stops and types as you go.
+      # Whisper (toggle): $mod+F7 records; press again to transcribe and type.
+      "$mod, F5, exec, ${homeDir}/.local/dict/vosk-begin.sh"
+      "$mod, F6, exec, ${homeDir}/.local/dict/vosk-end.sh"
+      "$mod, F7, exec, ${homeDir}/.local/dict/whisper-dict.sh"
     ]
-    # Workspace 1..10 op de cijferrij.
+    # Workspace 1..10 on the number row.
     #
-    # LET OP — dit stond fout in je oude config. Er stond "$mod, 1, ...", dus
-    # Hyprland bond op het keysym `1`. Op Belgisch AZERTY geeft die toets
-    # onbeschud `ampersand`; `1` krijg je pas mét Shift. `hyprctl binds`
-    # bevestigde het: `key: 1, keycode: 0`. Binden op de keycode van de
-    # fysieke toets (AE01 = 10 ... AE10 = 19) werkt ongeacht layout of niveau.
+    # NOTE: bind on the KEYCODE, not the keysym. `"$mod, 1, ..."` makes Hyprland
+    # bind the keysym `1`, but on Belgian AZERTY that key unshifted produces
+    # `ampersand` — `1` only exists with Shift, and `hyprctl binds` then reports
+    # `key: 1, keycode: 0`, i.e. a bind that never fires. The keycode of the
+    # physical key (AE01 = 10 ... AE10 = 19) works regardless of layout or
+    # level.
     ++ (builtins.concatLists (builtins.genList (i:
       let
         ws = toString (i + 1);
@@ -233,14 +260,14 @@ in
         "$mod SHIFT, ${key}, movetoworkspace, ${ws}"
       ]) 10));
 
-    # Venster slepen/schalen met de muis (of touchpad) + $mod.
+    # Drag/resize windows with the mouse (or touchpad) + $mod.
     bindm = [
-      "$mod, mouse:272, movewindow"     # linkerknop slepen = verplaatsen
-      "$mod, mouse:273, resizewindow"   # rechterknop slepen = schalen
+      "$mod, mouse:272, movewindow"     # drag with left button = move
+      "$mod, mouse:273, resizewindow"   # drag with right button = resize
     ];
 
     bindel = [
-      # Formaat wijzigen met het toetsenbord; herhaalt zolang je indrukt.
+      # Resize from the keyboard; repeats while held.
       "$mod CTRL SHIFT, right, resizeactive, 40 0"
       "$mod CTRL SHIFT, left, resizeactive, -40 0"
       "$mod CTRL SHIFT, down, resizeactive, 0 40"
