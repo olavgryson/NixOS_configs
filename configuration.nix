@@ -22,6 +22,11 @@ in
     ./greeter.nix   # login screen: greetd + ReGreet inside Hyprland
   ];
 
+  # Package overrides, e.g. the Upscayl onboarding patch in overlays/upscayl.nix
+  nixpkgs.overlays = [
+    (import ./overlays/upscayl.nix)
+  ];
+
   #### Boot / firmware ########################################################
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 10;   # keep ESP from overflowing

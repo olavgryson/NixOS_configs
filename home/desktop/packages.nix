@@ -43,6 +43,14 @@
     categories = [ "TextEditor" ];
   };
   xdg.mimeApps.defaultApplications = {
+    # Web is Zen. Without these, xdg-mime falls back to the first browser
+    # desktop file alphabetically (chromium), and Zen's own "make default"
+    # click fails silently: ~/.config/mimeapps.list is a read-only symlink
+    # into the Nix store, so the browser cannot persist its choice there.
+    "x-scheme-handler/http" = "zen-beta.desktop";
+    "x-scheme-handler/https" = "zen-beta.desktop";
+    "text/html" = "zen-beta.desktop";
+    "application/xhtml+xml" = "zen-beta.desktop";
     "text/markdown" = "nvim-open.desktop";
     "text/x-markdown" = "nvim-open.desktop";
     "text/plain" = "nvim-open.desktop";
