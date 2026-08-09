@@ -48,7 +48,7 @@ in
     LC_PAPER = "nl_BE.UTF-8";
   };
   console.keyMap = "be-latin1";
-  services.xserver.xkb = { layout = "be"; model = "pc105"; };
+  services.xserver.xkb = { layout = "be"; model = "pc105"; options = "caps:digits_row"; };
 
   #### Networking #############################################################
   networking.networkmanager.enable = true;
@@ -108,6 +108,15 @@ in
   };
   services.avahi = { enable = true; nssmdns4 = true; openFirewall = true; };  # network printer discovery
   hardware.sane.enable = true;   # scanner; Brother USB scan may need brscan5
+
+  #### Fingerprint reader (Synaptics 06cb:0104) ###############################
+  # fprintd + libfprint's synaptics driver. Enabling the service is enough:
+  # `security.pam.services.*.fprintAuth` defaults to services.fprintd.enable,
+  # so every PAM consumer (login screen, sudo, polkit, hyprlock) gets the
+  # reader as a `sufficient` step with the password still as fallback.
+  # Enrol per user, once: `fprintd-enroll` (repeat with -f for more fingers),
+  # check with `fprintd-list $USER`.
+  services.fprintd.enable = true;
 
   #### Desktop: Hyprland (Wayland) ############################################
   programs.hyprland.enable = true;          # sets up portals + session

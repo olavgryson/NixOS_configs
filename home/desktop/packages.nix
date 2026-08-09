@@ -32,7 +32,20 @@
   ];
 
   # Open images in the viewer, not the browser (browser can't page through a folder).
+  # Open markdown and plain text in nvim inside kitty. Obsidian can't open
+  # arbitrary files (only notes in its own vaults), so it's not a candidate.
+  # xdg.mimeApps needs enable = true or the mapping below is silently ignored.
+  xdg.mimeApps.enable = true;
+  xdg.desktopEntries."nvim-open" = {
+    name = "Open in nvim";
+    exec = "${pkgs.kitty}/bin/kitty -e nvim %F";
+    terminal = false;
+    categories = [ "TextEditor" ];
+  };
   xdg.mimeApps.defaultApplications = {
+    "text/markdown" = "nvim-open.desktop";
+    "text/x-markdown" = "nvim-open.desktop";
+    "text/plain" = "nvim-open.desktop";
     "image/jpeg" = "viewnior.desktop";
     "image/png" = "viewnior.desktop";
     "image/gif" = "viewnior.desktop";

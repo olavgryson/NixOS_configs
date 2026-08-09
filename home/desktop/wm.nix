@@ -65,6 +65,10 @@ in
 
       input = {
         kb_layout = "be";              # Belgian AZERTY
+        # digits are on level-2 (Shift) of the number row, and Caps Lock's
+        # Lock modifier doesn't reach them; this option retypes the row so
+        # Caps Lock yields the digits (tradeoff: À È É Ç uppercase gone).
+        kb_options = "caps:digits_row";
         follow_mouse = 1;
         touchpad = { natural_scroll = true; tap-to-click = true; };
       };

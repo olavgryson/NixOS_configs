@@ -144,6 +144,7 @@ let
     input {
       kb_layout = be
       kb_model  = pc105
+      kb_options = caps:digits_row
       follow_mouse = 1
       touchpad {
         natural_scroll = true

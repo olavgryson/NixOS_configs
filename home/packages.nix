@@ -11,6 +11,18 @@
     opencode                           # AI coding agent, terminal
     github-copilot-cli                 # GitHub Copilot, terminal
     antigravity-cli                    # Google Antigravity, terminal (Go TUI agent client)
+    # Kimi Code — official installer drops the self-updating binary to
+    # ~/.kimi-code/bin (nix can't track it), so just expose that on PATH.
+    # The installer's binary is built for a generic glibc layout; repatch its
+    # interpreter to ours each run (updates overwrite it) so NixOS can exec it.
+    (pkgs.writeShellScriptBin "kimi" ''
+      BIN="$HOME/.kimi-code/bin/kimi"
+      [ -e "$BIN" ] || { echo "kimi not found: $BIN — re-run the installer"; exit 1; }
+      INTERP="$(${pkgs.patchelf}/bin/patchelf --print-interpreter "${pkgs.bash}/bin/bash")"
+      ${pkgs.patchelf}/bin/patchelf --set-interpreter "$INTERP" \
+        --set-rpath "${pkgs.gcc.cc.lib}/lib" "$BIN"
+      exec "$BIN" "$@"
+    '')
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
     # for individuals — "Sign in with Google" fails and points at Antigravity.
     # Only a paid Gemini API key or Vertex AI still authenticates, so it buys

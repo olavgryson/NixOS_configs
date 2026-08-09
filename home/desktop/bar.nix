@@ -220,6 +220,30 @@ def set_brightness(monitor, pct):
         except Exception:
             pass
 
+# Nightlight = wl-gammarelay colour temperature. The global object "/" applies
+# to every output at once; the default (daylight) is 6500K.
+NIGHTLIGHT_TEMP = 4500
+NORMAL_TEMP = 6500
+
+def get_temperature():
+    try:
+        res = subprocess.run([
+            "${pkgs.systemd}/bin/busctl", "--user", "get-property", "rs.wl-gammarelay",
+            "/", "rs.wl.gammarelay", "Temperature"
+        ], capture_output=True, text=True, check=True)
+        return int(res.stdout.strip().split()[-1])
+    except Exception:
+        return NORMAL_TEMP
+
+def set_temperature(temp):
+    try:
+        subprocess.run([
+            "${pkgs.systemd}/bin/busctl", "--user", "set-property", "rs.wl-gammarelay",
+            "/", "rs.wl.gammarelay", "Temperature", "q", str(temp)
+        ], check=False)
+    except Exception:
+        pass
+
 CSS = """
 window {
     background-color: transparent;
@@ -247,6 +271,22 @@ window {
     color: ${css.text};
     font-weight: bold;
     font-size: 13px;
+}
+.nightlight-row {
+    background-color: ${css.surface};
+    border: 1px solid ${css.overlay};
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 10px;
+}
+.nightlight-row switch {
+    background-color: ${css.overlay};
+    border-radius: 999px;
+    min-height: 20px;
+    min-width: 38px;
+}
+.nightlight-row switch:checked {
+    background-color: ${css.sky};
 }
 .monitor-sub {
     color: ${css.subtle};
@@ -343,6 +383,18 @@ class BrightnessPopover(Gtk.Window):
                 card = self.create_monitor_card(mon)
                 main_box.pack_start(card, False, False, 0)
 
+        night_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        night_row.get_style_context().add_class("nightlight-row")
+        night_lbl = Gtk.Label(label="☾  Nightlight")
+        night_lbl.get_style_context().add_class("monitor-title")
+        night_lbl.set_xalign(0)
+        night_switch = Gtk.Switch()
+        night_switch.set_active(get_temperature() < 6000)
+        night_switch.connect("state-set", self.on_night_toggle)
+        night_row.pack_start(night_lbl, True, True, 0)
+        night_row.pack_end(night_switch, False, False, 0)
+        main_box.pack_start(night_row, False, False, 0)
+
         self.connect("key-press-event", self.on_key_press)
         self.show_all()
 
@@ -405,6 +457,9 @@ class BrightnessPopover(Gtk.Window):
         slider_row.pack_start(pct_lbl, False, False, 0)
         card.pack_start(slider_row, False, False, 0)
         return card
+
+    def on_night_toggle(self, switch, state):
+        set_temperature(NIGHTLIGHT_TEMP if state else NORMAL_TEMP)
 
     def on_mouse_leave(self, widget, event):
         if event.detail == Gdk.NotifyType.INFERIOR:
