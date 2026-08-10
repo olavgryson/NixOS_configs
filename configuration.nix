@@ -79,6 +79,20 @@ in
     alsa.support32Bit = true;
     pulse.enable = true;
     jack.enable = true;
+
+    # Bluetooth headsets that support HFP drop to headset profile (mSBC, mono,
+    # telephony-quality audio) whenever any app opens the headset microphone.
+    # While that profile is active, ALL playback — not just the app that grabbed
+    # the mic — sounds terrible. Disable the auto-switch so headsets stay on
+    # A2DP and music quality is never degraded. Trade-off: the headset mic no
+    # longer engages automatically for calls; use the laptop mic instead.
+    wireplumber.configPackages = [
+      (pkgs.writeTextDir "share/wireplumber/wireplumber.conf.d/50-bluetooth-a2dp-only.conf" ''
+        wireplumber.settings = {
+          bluetooth.autoswitch-to-headset-profile = false
+        }
+      '')
+    ];
   };
 
   #### Bluetooth ##############################################################

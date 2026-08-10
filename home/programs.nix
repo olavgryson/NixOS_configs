@@ -6,9 +6,11 @@
   #### Git ###################################################################
   programs.git = {
     enable = true;
-    userName = "Olav Gryson";
-    userEmail = "olav.gryson@gmail.com";
-    extraConfig.init.defaultBranch = "main";
+    settings = {
+      user.name = "Olav Gryson";
+      user.email = "olav.gryson@gmail.com";
+      init.defaultBranch = "main";
+    };
   };
 
   #### Shell (keeps bash, adds modern helpers) ################################

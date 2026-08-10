@@ -22,7 +22,7 @@
     networkmanager_dmenu    # Wi-Fi picker for the waybar `network` module
     # blueman comes from services.blueman.enable in ../configuration.nix, so
     # the GUI and its system service (blueman-mechanism) share one version.
-    nautilus xfce.thunar   # file managers (GTK)
+    nautilus thunar        # file managers (GTK)
     udiskie                # auto-mounts USB drives on plug-in; status is the custom/disks waybar module
     nwg-look               # GTK theme settings
     polkit_gnome           # auth agent
@@ -59,11 +59,11 @@
     "image/webp" = "viewnior.desktop";
     "image/bmp" = "viewnior.desktop";
     "image/svg+xml" = "viewnior.desktop";
-    "model/gltf-binary" = "io.github.f3d_app.f3d.desktop";
-    "model/gltf+json" = "io.github.f3d_app.f3d.desktop";
-    "application/x-gltf-binary" = "io.github.f3d_app.f3d.desktop";
-    "model/obj" = "io.github.f3d_app.f3d.desktop";
-    "model/stl" = "io.github.f3d_app.f3d.desktop";
-    "model/3mf" = "io.github.f3d_app.f3d.desktop";
+    "model/gltf-binary" = "f3d.desktop";
+    "model/gltf+json" = "f3d.desktop";
+    "application/x-gltf-binary" = "f3d.desktop";
+    "model/obj" = "f3d.desktop";
+    "model/stl" = "f3d.desktop";
+    "model/3mf" = "f3d.desktop";
   };
 }
