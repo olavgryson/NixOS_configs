@@ -25,7 +25,6 @@
     nautilus xfce.thunar   # file managers (GTK)
     udiskie                # auto-mounts USB drives on plug-in; status is the custom/disks waybar module
     nwg-look               # GTK theme settings
-    papirus-icon-theme     # icons for rofi's app list (icon-theme below)
     polkit_gnome           # auth agent
     viewnior               # image viewer: arrows scroll through the folder's
                            # images out of the box, no config needed
@@ -60,5 +59,11 @@
     "image/webp" = "viewnior.desktop";
     "image/bmp" = "viewnior.desktop";
     "image/svg+xml" = "viewnior.desktop";
+    "model/gltf-binary" = "io.github.f3d_app.f3d.desktop";
+    "model/gltf+json" = "io.github.f3d_app.f3d.desktop";
+    "application/x-gltf-binary" = "io.github.f3d_app.f3d.desktop";
+    "model/obj" = "io.github.f3d_app.f3d.desktop";
+    "model/stl" = "io.github.f3d_app.f3d.desktop";
+    "model/3mf" = "io.github.f3d_app.f3d.desktop";
   };
 }

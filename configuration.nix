@@ -372,6 +372,7 @@ in
     pciutils usbutils
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
+    f3d                        # fast 3D model viewer (glTF/glb, obj, stl)
     # Short name for the passwordless rebuild command above.
     (writeShellScriptBin "rebuild" ''
       exec sudo ${nixosRebuildSwitch}

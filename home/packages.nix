@@ -53,7 +53,7 @@
     antigravity-ide                    # Google's AI editor
 
     ## --- terminal / CLI tools ---
-    ripgrep fd fzf bat eza zoxide jq yq
+    ripgrep fd fzf bat eza zoxide jq yq glib
     htop btop fastfetch fetch ncdu
     gocryptfs sshfs                    # encrypted FUSE fs + remote ssh mounts
     gnupg pass                         # GnuPG + password-store
@@ -74,6 +74,7 @@
 
     ## --- creative / 3D / making ---
     blender
+    f3d                                # fast 3D viewer (glTF/glb, obj, stl)
     # DISABLED: not in the binary cache on the current unstable snapshot, so
     # they compile from source (too slow / OOM). Re-enable with one rebuild once
     # the cache has caught up. Alternative for bambu-studio: orca-slicer.
