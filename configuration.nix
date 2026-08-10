@@ -13,7 +13,7 @@ let
   #      subcommand other than `switch`.
   nixosRebuildSwitch = pkgs.writeShellScript "nixos-rebuild-switch" ''
     exec /run/current-system/sw/bin/nixos-rebuild switch \
-      --flake /home/ogryson/nixos-config#dragonflyg4
+      --flake path:/home/ogryson/nixos-config#dragonflyg4
   '';
 in
 
