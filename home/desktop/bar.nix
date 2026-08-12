@@ -124,6 +124,124 @@ let
     fi
   '';
 
+  # ── Timer / alarm CLI ────────────────────────────────────────────────────
+  # One `timer` command drives the bar module AND the alarm. State lives in two
+  # places on purpose:
+  #   XDG_RUNTIME_DIR/timer-$UID   volatile countdown (end, total, pid) — wiped
+  #                                on reboot, so a stale timer after a restart
+  #                                is cleaned up by `status`, not misread.
+  #   ~/.config/timer/sound        persistent on/off flag — survives reboots.
+  # The alarm is a background watcher started by `start`. It sleeps in 1s ticks
+  # and reads wall time, so a wake from suspend mid-timer still fires.
+  # Sound is three sox synth beeps straight out of the PipeWire pulse sink — no
+  # audio file to ship or keep around.
+  timerScript = pkgs.writeShellScriptBin "timer" ''
+    set -eu
+    PATH=${lib.makeBinPath [
+      pkgs.coreutils    # date, sleep, cat, rm, echo, mkdir
+      pkgs.gawk         # awk (math + progress bar)
+      pkgs.libnotify    # notify-send
+      pkgs.sox          # play (the beep)
+    ]}
+
+    STATE_DIR="''${XDG_RUNTIME_DIR:-/tmp}/timer-$UID"
+    CONF_DIR="$HOME/.config/timer"
+
+    now()  { date +%s; }
+    mmss() { awk -v s="$1" 'BEGIN{ printf "%d:%02d", s/60, s%60 }'; }
+
+    running() {
+      [ -f "$STATE_DIR/end" ] || return 1
+      [ "$(now)" -lt "$(cat "$STATE_DIR/end")" ]
+    }
+
+    sound_on() { [ "$(cat "$CONF_DIR/sound" 2>/dev/null || echo on)" = "on" ]; }
+    set_sound() { mkdir -p "$CONF_DIR"; echo "$1" > "$CONF_DIR/sound"; }
+
+    spawn_alarm() {
+      (
+        while :; do
+          sleep 1
+          [ -f "$STATE_DIR/end" ] || exit 0          # timer was stopped
+          [ "$(now)" -ge "$(cat "$STATE_DIR/end")" ] || continue
+          rm -f "$STATE_DIR/end" "$STATE_DIR/total" "$STATE_DIR/pid"
+          if sound_on; then
+            play -q -n synth 0.3 sine 880 || true
+            play -q -n synth 0.3 sine 880 || true
+            play -q -n synth 0.3 sine 880 || true
+          fi
+          notify-send -u critical -a "Timer" "Timer done" "Time's up!"
+          exit 0
+        done
+      ) >/dev/null 2>&1 &
+      echo $! > "$STATE_DIR/pid"
+    }
+
+    start() {
+      secs="$1"
+      mkdir -p "$STATE_DIR"
+      # Kill a previous alarm (pid reuse is checked via kill -0, not assumed).
+      if [ -f "$STATE_DIR/pid" ] && kill -0 "$(cat "$STATE_DIR/pid")" 2>/dev/null; then
+        kill "$(cat "$STATE_DIR/pid")"
+      fi
+      echo "$secs" > "$STATE_DIR/total"
+      echo "$(( $(now) + secs ))" > "$STATE_DIR/end"
+      spawn_alarm
+      notify-send -a "Timer" "Timer started" "$(mmss "$secs") - click the bar icon to stop"
+    }
+
+    stop() {
+      if [ -f "$STATE_DIR/pid" ] && kill -0 "$(cat "$STATE_DIR/pid")" 2>/dev/null; then
+        kill "$(cat "$STATE_DIR/pid")"
+      fi
+      rm -f "$STATE_DIR/end" "$STATE_DIR/total" "$STATE_DIR/pid"
+      notify-send -a "Timer" "Timer stopped"
+    }
+
+    # JSON for the waybar module. Running: progress bar + time left. Idle: the
+    # empty text makes the module disappear from the bar (same trick as
+    # custom/brightness without an external screen).
+    status() {
+      if running; then
+        total=$(cat "$STATE_DIR/total")
+        left=$(( $(cat "$STATE_DIR/end") - $(now) ))
+        done=$(( total - left ))
+        pct=$(awk -v d="$done" -v t="$total" 'BEGIN{ printf "%d", d/t*100 }')
+        bar=$(awk -v p="$pct" 'BEGIN{ n=int(p/10+0.5); s=""; for(i=0;i<10;i++) s=s (i<n?"█":"░"); print s }')
+        snd=$(sound_on && echo on || echo off)
+        printf '{"text":"󰥔 %s %s %d%%","tooltip":"Timer - %s left\\nLeft-click: stop\\nRight-click: sound on/off (now %s)","class":"running","percentage":%d}\n' \
+          "$(mmss "$left")" "$bar" "$pct" "$(mmss "$left")" "$snd" "$pct"
+      else
+        # Idle: drop stale state left by a reboot or a crashed alarm process.
+        rm -f "$STATE_DIR/end" "$STATE_DIR/total"
+        [ -f "$STATE_DIR/pid" ] && { kill -0 "$(cat "$STATE_DIR/pid")" 2>/dev/null || rm -f "$STATE_DIR/pid"; }
+        printf '{"text":"","tooltip":""}\n'
+      fi
+    }
+
+    toggle_sound() {
+      if sound_on; then set_sound off; else set_sound on; fi
+      notify-send -a "Timer" "Timer sound" "Notification sound $(sound_on && echo on || echo off)"
+    }
+
+    # Accept "MINUTES" (e.g. 25, or 1.5) or "M:SS" (e.g. 1:30).
+    parse_secs() {
+      case "$1" in
+        *:*) awk -F: -v m="''${1%:*}" -v s="''${1##*:}" 'BEGIN{ printf "%d", m*60 + s }' ;;
+        *)   awk -v m="$1" 'BEGIN{ printf "%d", m*60 }' ;;
+      esac
+    }
+
+    case "''${1:-}" in
+      start)  [ -n "''${2:-}" ] || { echo "usage: timer start MINUTES|M:SS"; exit 1; }
+              start "$(parse_secs "$2")" ;;
+      stop)   stop ;;
+      status) status ;;
+      sound)  toggle_sound ;;
+      *) echo "usage: timer {start MINUTES|M:SS | stop | status | sound}"; exit 1 ;;
+    esac
+  '';
+
   pythonForGtk = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
 
   brightnessPopover = pkgs.stdenv.mkDerivation {
@@ -506,6 +624,9 @@ EOF
   };
 in
 {
+  # The timer CLI used by the custom/timer module below.
+  home.packages = [ timerScript ];
+
   #### Status bar ############################################################
   # Without a config here, waybar falls back to /etc/xdg/waybar/config. That
   # default is written for Sway (sway/workspaces) and its battery line uses a
@@ -527,7 +648,7 @@ in
       spacing = 6;
 
       modules-left = [ "hyprland/workspaces" "hyprland/window" ];
-      modules-center = [ "clock" "custom/dictation" ];
+      modules-center = [ "clock" "custom/timer" "custom/dictation" ];
       modules-right = [
         "cpu" "memory" "temperature"
         "power-profiles-daemon"
@@ -619,6 +740,21 @@ in
         format = "{}";
         escape = false;
         tooltip = false;
+      };
+
+      # ── Timer / alarm ────────────────────────────────────────────────────
+      # `timer start 25` (or `timer start 1:30`) starts a countdown; this module
+      # shows progress + time left while it runs and hides itself when idle.
+      # Left-click stops it, right-click toggles the completion sound.
+      "custom/timer" = {
+        exec = "${timerScript}/bin/timer status";
+        return-type = "json";
+        interval = 1;
+        format = "{}";
+        escape = false;
+        tooltip = true;
+        on-click = "${timerScript}/bin/timer stop";
+        on-click-right = "${timerScript}/bin/timer sound";
       };
 
       pulseaudio = {
@@ -828,6 +964,7 @@ in
          separated by their own icon colour, not by boxes. */
       #clock, #battery, #backlight, #pulseaudio, #network, #bluetooth, #power-profiles-daemon, #tray,
       #cpu, #memory, #temperature,
+      #custom-timer,
       #custom-power, #custom-lock, #custom-suspend, #custom-hibernate, #custom-reboot, #custom-shutdown,
       #custom-brightness-ext,
       #custom-bright-100, #custom-bright-75, #custom-bright-50, #custom-bright-25 {
@@ -852,6 +989,9 @@ in
       #network     { color: ${css.sky}; }
       #bluetooth   { color: ${css.haze}; }
       #cpu, #memory, #temperature { color: ${css.subtle}; }
+
+      /* Timer: sky while counting down. */
+      #custom-timer { color: ${css.sky}; }
 
       #power-profiles-daemon              { color: ${css.ochre}; }
       #power-profiles-daemon.performance  { color: ${css.alarm}; }

@@ -8,6 +8,7 @@
   home.packages = with pkgs; [
     ## --- the thing you want first ---
     claude-code
+    codex                              # OpenAI Codex, terminal coding agent
     opencode                           # AI coding agent, terminal
     github-copilot-cli                 # GitHub Copilot, terminal
     antigravity-cli                    # Google Antigravity, terminal (Go TUI agent client)
@@ -44,6 +45,7 @@
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
     gnumake gcc cmake                  # build toolchain
+    sox                                # audio synth/play — timer alarm beep
 
     ## --- editors / IDEs ---
     vscode
