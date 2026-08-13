@@ -15,6 +15,13 @@ let
     exec /run/current-system/sw/bin/nixos-rebuild switch \
       --flake path:/home/ogryson/nixos-config#dragonflyg4
   '';
+
+  # Brain auto-sync must run as ogryson (git/agy need the user's SSH key, home
+  # dir and config). systemd sleep/shutdown hooks run as root, so the push
+  # script is delegated via runuser. `--window` makes it a no-op unless the
+  # clock is 16:00-19:59.
+  brainPush =
+    "/run/current-system/sw/bin/runuser -u ogryson -- /home/ogryson/.local/bin/push-brain.sh --window";
 in
 
 {
@@ -312,6 +319,24 @@ in
   services.udisks2.enable = true;
   services.gvfs.enable = true;
 
+  #### btrfs snapshots (snapper) ###############################################
+  # Hourly timeline snapshots of / and /home, pruned by age. Rollback of / is
+  # not configured: with a separate @nix subvolume, booting an old snapshot
+  # means mixing an old system with the current /nix store. Use boot menu
+  # generations for system rollback and snapper for /home data.
+  services.snapper.configs = {
+    root = {
+      SUBVOLUME = "/";
+      TIMELINE_CREATE = true;
+      TIMELINE_CLEANUP = true;
+    };
+    home = {
+      SUBVOLUME = "/home";
+      TIMELINE_CREATE = true;
+      TIMELINE_CLEANUP = true;
+    };
+  };
+
   #### External backup disk ###################################################
   # Kingston SV300S37A240G, 240G, ext4, label `backup`.
   #
@@ -392,6 +417,52 @@ in
       exec sudo ${nixosRebuildSwitch}
     '')
   ];
+
+  #### Brain auto-sync (agyd = Google AI agent) ################################
+  # ~/.local/bin/push-brain.sh commits + pushes ~/brain/{gryve,personal} with
+  # AI-generated commit messages. Coverage:
+  #   - 20:00 daily timer (Persistent -> catches up after a missed day, PC off)
+  #   - sleep/suspend/hibernate hooks (16:00-19:59 only): lid close or
+  #     suspend-then-hibernate between those hours still gets a push first
+  #   - best-effort pre-shutdown hook (network may already be down; the 20:00
+  #     timer is the real fallback then)
+  systemd.timers.brain-push = {
+    description = "Push Obsidian brain repos at 20:00";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 20:00:00";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.brain-push = {
+    description = "Push Obsidian brain repos with AI commit messages";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "ogryson";
+      ExecStart = "/home/ogryson/.local/bin/push-brain.sh";
+    };
+  };
+
+  # sleep-actions.service is NixOS's own sleep target hook; ExecStartPre there
+  # runs before systemd-suspend / systemd-hibernate / suspend-then-hibernate.
+  systemd.services.sleep-actions.serviceConfig.ExecStartPre = [ brainPush ];
+
+  # Shutdown hook: RemainAfterExit oneshot under shutdown.target -> ExecStop
+  # fires while the network may still be up. Best-effort.
+  systemd.services.brain-push-shutdown = {
+    description = "Push brain repos before shutdown (16:00-19:59 only)";
+    unitConfig.DefaultDependencies = false;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "/run/current-system/sw/bin/true";
+      ExecStop = brainPush;
+    };
+    wantedBy = [ "shutdown.target" ];
+  };
 
   #### State version — DO NOT change after first install ######################
   system.stateVersion = "25.11";
