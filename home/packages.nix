@@ -11,7 +11,7 @@
     codex                              # OpenAI Codex, terminal coding agent
     opencode                           # AI coding agent, terminal
     github-copilot-cli                 # GitHub Copilot, terminal
-    antigravity-cli                    # Google Antigravity, terminal (Go TUI agent client)
+    inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # Kimi Code — official installer drops the self-updating binary to
     # ~/.kimi-code/bin (nix can't track it), so just expose that on PATH.
     # The installer's binary is built for a generic glibc layout; repatch its
@@ -52,7 +52,7 @@
     neovim
     jetbrains.idea-oss                 # IntelliJ IDEA (open-source build; idea-community discontinued)
     tmux
-    antigravity-ide                    # Google's AI editor
+    inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
     ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq glib

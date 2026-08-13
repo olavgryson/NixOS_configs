@@ -16,6 +16,13 @@
       url = "github:0xc000022070/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Antigravity CLI + IDE: nixpkgs lags weeks behind Google's near-daily
+    # releases, so take them from this auto-updating (3x/week) flake instead.
+    antigravity-nix = {
+      url = "github:jacopone/antigravity-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
