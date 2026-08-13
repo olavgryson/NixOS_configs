@@ -64,7 +64,11 @@
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
-    obsidian
+    # Obsidian ignores the system dark-mode preference (its Chromium build never
+    # queries gtk-application-prefer-dark-theme), so force Chromium's own switch.
+    (pkgs.writeShellScriptBin "obsidian" ''
+      exec ${pkgs.obsidian}/bin/obsidian --force-dark-mode "$@"
+    '')
     discord
     spotify
     vlc                                # mpv is not here: see programs.mpv below

@@ -40,7 +40,14 @@ in
       name = "Noto Sans";
       size = 10;
     };
+    # Chromium/Electron read this to answer "prefers-color-scheme" — without it
+    # Obsidian etc. ignore the dark GTK theme and render light.
+    gtk3.extraConfig = { gtk-application-prefer-dark-theme = 1; };
+    gtk4.extraConfig = { gtk-application-prefer-dark-theme = 1; };
   };
+
+  # The modern "dark mode" switch for GNOME-era portals and apps.
+  dconf.settings."org.gnome.desktop.interface".color-scheme = "prefer-dark";
 
   # XCURSOR_* set the cursor for the compositor and every client too (see
   # the note on cursorTheme above), so nothing falls back to ~/.icons/default.
