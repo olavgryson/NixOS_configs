@@ -15,6 +15,7 @@
     grim slurp swappy      # screenshots (+ annotate)
     wl-clipboard cliphist  # clipboard + history
     brightnessctl playerctl pamixer pavucontrol
+    easyeffects             # audio EQ / effects GUI (PipeWire)
     ddcutil                # DDC/CI over i2c — only works on a DIRECT cable, not
                            # through the dock; see the note at brightnessExternal
     wl-gammarelay-rs       # external screen brightness via the gamma ramp
