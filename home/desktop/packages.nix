@@ -65,6 +65,25 @@
     "application/x-gltf-binary" = "f3d.desktop";
     "model/obj" = "f3d.desktop";
     "model/stl" = "f3d.desktop";
-    "model/3mf" = "f3d.desktop";
+    # 3MF goes to Orca Slicer, not f3d: slicer 3MF files (BambuStudio/Orca
+    # "production" format) carry geometry in separate 3D/Objects/*.model files
+    # plus non-model components that f3d's Assimp importer reads as empty —
+    # blank canvas. Orca Slicer opens its own exports; PrusaSlicer rejects the
+    # "type=other" components.
+    "model/3mf" = "com.orcaslicer.OrcaSlicer.desktop";
+    "application/vnd.ms-3mfdocument" = "com.orcaslicer.OrcaSlicer.desktop";
   };
+
+  # Swappy must know where to save: without save_dir it falls back to the
+  # desktop folder, so screenshots end up in ~/Desktop instead of Pictures.
+  xdg.configFile."swappy/config".text = ''
+    [Default]
+    save_dir=$HOME/Pictures/Screenshots
+    save_filename_format=swappy-%Y%m%d-%H%M%S.png
+    show_panel=false
+    line_size=5
+    text_size=20
+    text_font=sans-serif
+    paint_mode=brush
+  '';
 }

@@ -38,6 +38,12 @@ rebuild
   generation in systemd-boot. `Ctrl+Alt+F2` gets you a TTY.
 - Updating inputs: `nix flake update` (or `--update-input <name>`),
   `git add flake.lock`, then the same check/build/rebuild.
+- A bare `nix flake update` can pull an nixpkgs snapshot that has no cached
+  binary for `jetbrains.idea-oss`/kotlin, forcing a multi-30-minute source
+  build that OOMs this laptop (userspace build, not visible until it hangs).
+  Before bumping nixpkgs: either disable idea-oss (see `home/packages.nix`),
+  or update selectively (`--update-input zen-browser antigravity-nix`) and keep
+  nixpkgs+home-manager pinned to their locked revision.
 
 ## Where things live
 

@@ -25,8 +25,25 @@
       clauded = "claude --dangerously-skip-permissions";
       agyd = "agy --dangerously-skip-permissions";
       rebuild = "sudo nixos-rebuild switch --flake ~/nixos-config#dragonflyg4";
+      # Uses the school Copilot token (COPILOT_GITHUB_TOKEN) for this shell;
+      # token itself lives in ~/.config/environment.d/10-copilot.conf, not here.
+      copilotschool = "export $(cat ~/.config/environment.d/10-copilot.conf); copilot";
     };
   };
+  #### Agent multiplexer (herdr) #############################################
+  # Terminal multiplexer for running and watching multiple AI coding agents.
+  # TUI only — the desktop entry below makes it launchable from rofi.
+  programs.herdr.enable = true;
+
+  # Launcher entry: herdr has no .desktop of its own (terminal-only app).
+  xdg.desktopEntries."herdr" = {
+    name = "Herdr";
+    comment = "Agent multiplexer";
+    exec = "kitty herdr";
+    terminal = false;
+    categories = [ "System" ];
+  };
+
   programs.zoxide.enable = true;
   programs.fzf.enable = true;
 

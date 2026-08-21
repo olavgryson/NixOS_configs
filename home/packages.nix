@@ -7,23 +7,21 @@
 {
   home.packages = with pkgs; [
     ## --- the thing you want first ---
-    claude-code
+    # claude-code: nixpkgs lags behind Claude's release cadence (ships 2.1.234
+    # while upstream is at 2.1.237), so pin the tarball ourselves. To bump:
+    # `nix-prefetch-url --type sha256 <releases-url>/<version>/linux-x64/claude`
+    # and update version+sha256 here.
+    (claude-code.overrideAttrs (old: {
+      version = "2.1.237";
+      src = pkgs.fetchurl {
+        url = "https://downloads.claude.ai/claude-code-releases/2.1.237/linux-x64/claude";
+        sha256 = "05irzfmk91s58z9gbgkf8nwfnmqng2a4jqfndz7r71hhy1km35vk";
+      };
+    }))
     codex                              # OpenAI Codex, terminal coding agent
     opencode                           # AI coding agent, terminal
     github-copilot-cli                 # GitHub Copilot, terminal
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
-    # Kimi Code — official installer drops the self-updating binary to
-    # ~/.kimi-code/bin (nix can't track it), so just expose that on PATH.
-    # The installer's binary is built for a generic glibc layout; repatch its
-    # interpreter to ours each run (updates overwrite it) so NixOS can exec it.
-    (pkgs.writeShellScriptBin "kimi" ''
-      BIN="$HOME/.kimi-code/bin/kimi"
-      [ -e "$BIN" ] || { echo "kimi not found: $BIN — re-run the installer"; exit 1; }
-      INTERP="$(${pkgs.patchelf}/bin/patchelf --print-interpreter "${pkgs.bash}/bin/bash")"
-      ${pkgs.patchelf}/bin/patchelf --set-interpreter "$INTERP" \
-        --set-rpath "${pkgs.gcc.cc.lib}/lib" "$BIN"
-      exec "$BIN" "$@"
-    '')
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
     # for individuals — "Sign in with Google" fails and points at Antigravity.
     # Only a paid Gemini API key or Vertex AI still authenticates, so it buys
@@ -56,11 +54,13 @@
 
     ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq glib
+    glow                               # render .md in the terminal
     htop btop fastfetch fetch ncdu
     gocryptfs sshfs                    # encrypted FUSE fs + remote ssh mounts
     gnupg pass                         # GnuPG + password-store
     nmap                               # network scanner (CLI)
     imagemagick pandoc                 # image convert + document convert
+    pdftk qpdf poppler-utils           # PDF tools (merge, shuffle, split)
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
@@ -81,9 +81,13 @@
     ## --- creative / 3D / making ---
     blender
     f3d                                # fast 3D viewer (glTF/glb, obj, stl)
-    # DISABLED: not in the binary cache on the current unstable snapshot, so
-    # they compile from source (too slow / OOM). Re-enable with one rebuild once
-    # the cache has caught up. Alternative for bambu-studio: orca-slicer.
+    # Slicer + .3mf handler (see desktop/packages.nix). Orca Slicer (a Bambu
+    # Studio fork) opens the BambuStudio-format 3MF files it exports, which
+    # f3d's Assimp importer and PrusaSlicer both reject. Do NOT switch to
+    # bambu-studio: not in the binary cache on this flake's locked nixpkgs, so
+    # it compiles wxWidgets from source and OOMs this laptop.
+    orca-slicer
+    # DISABLED: source compile on this snapshot, too slow / OOM.
     # krita
     # bambu-studio                     # Bambu Lab 3D printer slicer
 
@@ -103,5 +107,18 @@
       hwdec = "auto-safe";
       vo = "gpu-next";
     };
+  };
+
+  # Obsidian is installed via the wrapper above, which is all that lands in the
+  # profile — obsidian's own obsidian.desktop + icon never get there, so the
+  # launcher would not find it. Restore the entry here, following webapps.nix.
+  xdg.desktopEntries."obsidian" = {
+    name = "Obsidian";
+    comment = "Knowledge base";
+    exec = "obsidian %u";
+    icon = "${pkgs.obsidian}/share/icons/hicolor/512x512/apps/obsidian.png";
+    terminal = false;
+    categories = [ "Office" ];
+    mimeType = [ "x-scheme-handler/obsidian" ];
   };
 }
