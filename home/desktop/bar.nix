@@ -367,91 +367,91 @@ window {
     background-color: transparent;
 }
 .popover-card {
-    background-color: ${css.base};
-    border: 1px solid ${css.overlay};
+    background-color: @base;
+    border: 1px solid @overlay;
     border-radius: 14px;
     padding: 16px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 .header-title {
-    color: ${css.text};
+    color: @text;
     font-weight: bold;
     font-size: 15px;
 }
 .monitor-card {
-    background-color: ${css.surface};
-    border: 1px solid ${css.overlay};
+    background-color: @surface;
+    border: 1px solid @overlay;
     border-radius: 10px;
     padding: 12px;
     margin-top: 10px;
 }
 .monitor-title {
-    color: ${css.text};
+    color: @text;
     font-weight: bold;
     font-size: 13px;
 }
 .nightlight-row {
-    background-color: ${css.surface};
-    border: 1px solid ${css.overlay};
+    background-color: @surface;
+    border: 1px solid @overlay;
     border-radius: 10px;
     padding: 12px;
     margin-top: 10px;
 }
 .nightlight-row switch {
-    background-color: ${css.overlay};
+    background-color: @overlay;
     border-radius: 999px;
     min-height: 20px;
     min-width: 38px;
 }
 .nightlight-row switch:checked {
-    background-color: ${css.sky};
+    background-color: @sky;
 }
 .monitor-sub {
-    color: ${css.subtle};
+    color: @subtle;
     font-size: 11px;
 }
 .active-badge {
-    background-color: ${css.stone};
-    color: ${css.ink};
+    background-color: @stone;
+    color: @ink;
     font-weight: bold;
     font-size: 10px;
     border-radius: 4px;
     padding: 2px 6px;
 }
 .pct-label {
-    color: ${css.stone};
+    color: @stone;
     font-weight: bold;
     font-size: 14px;
     min-width: 48px;
 }
 scale trough {
-    background-color: ${css.overlay};
+    background-color: @overlay;
     border-radius: 6px;
     min-height: 8px;
 }
 scale highlight {
-    background-color: ${css.stone};
+    background-color: @stone;
     border-radius: 6px;
     min-height: 8px;
 }
 scale slider {
-    background-color: ${css.text};
+    background-color: @text;
     border-radius: 50%;
     min-width: 18px;
     min-height: 18px;
     margin: -5px 0;
 }
 button.preset-btn {
-    background-color: ${css.overlay};
-    color: ${css.text};
+    background-color: @overlay;
+    color: @text;
     border-radius: 6px;
     padding: 4px 10px;
     font-size: 11px;
     border: none;
 }
 button.preset-btn:hover {
-    background-color: ${css.stone};
-    color: ${css.ink};
+    background-color: @stone;
+    color: @ink;
 }
 """
 
@@ -517,6 +517,18 @@ class BrightnessPopover(Gtk.Window):
         self.show_all()
 
     def apply_css(self):
+        # The palette file is the same runtime copy the theme switcher
+        # maintains for waybar; loading it as a second provider gives the
+        # popover the @named colours without baking hex in.
+        palette = os.path.expanduser("~/.config/theme/palette.css")
+        if os.path.exists(palette):
+            pprov = Gtk.CssProvider()
+            pprov.load_from_path(palette)
+            Gtk.StyleContext.add_provider_for_screen(
+                Gdk.Screen.get_default(),
+                pprov,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
         provider = Gtk.CssProvider()
         provider.load_from_data(CSS.encode())
         Gtk.StyleContext.add_provider_for_screen(
@@ -913,10 +925,13 @@ in
       tray.spacing = 10;
     };
 
-    # Colours come from ../theme.nix (sampled from the wallpaper). GTK CSS has
-    # no `#rrggbbaa`, but it does have alpha(colour, factor) — used everywhere
-    # something needs to be translucent.
+    # Colours come from the runtime palette copy (../theme/palette.css),
+    # imported as GTK-CSS @define-color names so the theme switcher recolours
+    # the bar live without a rebuild. GTK CSS has no `#rrggbbaa`, but it does
+    # have alpha(colour, factor) — used everywhere something needs translucent.
     style = ''
+      @import url("../theme/palette.css");
+
       * {
         font-family: "JetBrainsMono Nerd Font";
         font-size: 12px;
@@ -925,109 +940,116 @@ in
         min-height: 0;
       }
 
-      /* The dark foreground of the painting, with the horizon haze as a hair
-         line under it, so the bar has an edge without being harsh. */
+      /* The bar canvas is transparent: every module paints its own pill, so
+         the palette file alone decides how the bar looks. */
       window#waybar {
-        background: alpha(${css.ink}, 0.86);
-        color: ${css.text};
-        border-bottom: 1px solid alpha(${css.haze}, 0.22);
+        background: transparent;
+        color: @text;
       }
 
-      #workspaces { margin-left: 4px; }
+      /* Workspaces: one pill per workspace. The active workspace inverts to
+         sky background with ink text — the lightest area of the canvas. */
+      #workspaces { margin-left: 6px; }
       #workspaces button {
-        padding: 0 10px;
-        margin: 4px 2px;
-        border-radius: 6px;
-        color: ${css.subtle};
-        background: transparent;
+        padding: 0 12px;
+        margin: 5px 2px;
+        border-radius: 16px;
+        color: @subtle;
+        background: alpha(@surface, 0.9);
       }
       #workspaces button:hover {
-        background: alpha(${css.haze}, 0.12);
-        color: ${css.text};
+        background: alpha(@overlay, 0.9);
+        color: @text;
       }
-      /* Active workspace = the sky: the lightest area on the canvas. */
       #workspaces button.active {
-        color: ${css.ink};
-        background: ${css.sky};
+        color: @ink;
+        background: @sky;
       }
       #workspaces button.urgent {
-        color: ${css.ink};
-        background: ${css.alarm};
+        color: @ink;
+        background: @alarm;
       }
 
+      /* The focused window title floats as its own faint pill. */
       #window {
-        color: ${css.subtle};
-        padding: 0 10px;
+        color: @subtle;
+        padding: 0 12px;
+        margin: 5px 2px;
+        border-radius: 16px;
+        background: alpha(@surface, 0.55);
       }
 
-      /* The right-hand side is one continuous "limestone" band: modules are
-         separated by their own icon colour, not by boxes. */
-      #clock, #battery, #backlight, #pulseaudio, #network, #bluetooth, #power-profiles-daemon, #tray,
+      /* Omarchy pill look: each module is a self-contained rounded pill over a
+         translucent base; separation comes from margins, not divider borders.
+         custom-disks is listed explicitly because it renders unstyled (and on
+         a transparent bar would be unreadable) without a pill rule. */
+      #clock, #battery, #backlight, #pulseaudio, #network, #bluetooth,
+      #power-profiles-daemon, #tray, #custom-disks,
       #cpu, #memory, #temperature,
       #custom-timer,
-      #custom-power, #custom-lock, #custom-suspend, #custom-hibernate, #custom-reboot, #custom-shutdown,
+      #custom-power, #custom-lock, #custom-suspend, #custom-hibernate,
+      #custom-reboot, #custom-shutdown,
       #custom-brightness-ext,
       #custom-bright-100, #custom-bright-75, #custom-bright-50, #custom-bright-25 {
         padding: 0 10px;
-        margin: 4px 0;
-        color: ${css.text};
-        background: transparent;
+        margin: 5px 2px;
+        border-radius: 16px;
+        color: @text;
+        background: alpha(@base, 0.9);
       }
 
       /* The clock is centred and is allowed to stand out most. */
       #clock {
-        color: ${css.stone};
+        color: @stone;
         padding: 0 14px;
-        margin: 4px 4px;
-        border-radius: 6px;
-        background: alpha(${css.stone}, 0.10);
+        background: alpha(@stone, 0.10);
       }
 
-      #backlight { color: ${css.ochre}; }
-      #custom-brightness { color: ${css.sky}; }
-      #pulseaudio  { color: ${css.haze}; }
-      #network     { color: ${css.sky}; }
-      #bluetooth   { color: ${css.haze}; }
-      #cpu, #memory, #temperature { color: ${css.subtle}; }
+      #backlight { color: @ochre; }
+      #custom-brightness { color: @sky; }
+      #pulseaudio  { color: @haze; }
+      #network     { color: @sky; }
+      #bluetooth   { color: @haze; }
+      #cpu, #memory, #temperature { color: @subtle; }
 
       /* Timer: sky while counting down. */
-      #custom-timer { color: ${css.sky}; }
+      #custom-timer { color: @sky; }
 
-      #power-profiles-daemon              { color: ${css.ochre}; }
-      #power-profiles-daemon.performance  { color: ${css.alarm}; }
-      #power-profiles-daemon.balanced     { color: ${css.sky}; }
-      #power-profiles-daemon.power-saver  { color: ${css.meadow}; }
+      #power-profiles-daemon              { color: @ochre; }
+      #power-profiles-daemon.performance  { color: @alarm; }
+      #power-profiles-daemon.balanced     { color: @sky; }
+      #power-profiles-daemon.power-saver  { color: @meadow; }
 
-      #custom-power     { color: ${css.alarm}; }
-      #custom-lock      { color: ${css.stone}; }
-      #custom-suspend   { color: ${css.sky}; }
-      #custom-hibernate { color: ${css.haze}; }
+      #custom-power     { color: @alarm; }
+      #custom-lock      { color: @stone; }
+      #custom-suspend   { color: @sky; }
+      #custom-hibernate { color: @haze; }
       /* Reboot sits next to shutdown, so it gets ochre rather than alarm red:
          the destructive-looking one should be the one that actually powers off. */
-      #custom-reboot    { color: ${css.ochre}; }
-      #custom-shutdown  { color: ${css.alarm}; }
+      #custom-reboot    { color: @ochre; }
+      #custom-shutdown  { color: @alarm; }
 
-      #pulseaudio.muted        { color: ${css.muted}; }
-      #network.disconnected    { color: ${css.muted}; }
-      #bluetooth.disabled      { color: ${css.muted}; }
+      #pulseaudio.muted        { color: @muted; }
+      #network.disconnected    { color: @muted; }
+      #bluetooth.disabled      { color: @muted; }
 
-      #battery          { color: ${css.meadow}; }
-      #battery.charging { color: ${css.meadow}; }
-      #battery.warning  { color: ${css.ochre}; }
-      #battery.critical { color: ${css.alarm}; }
+      #battery          { color: @meadow; }
+      #battery.charging { color: @meadow; }
+      #battery.warning  { color: @ochre; }
+      #battery.critical { color: @alarm; }
 
       /* Same colour code as the battery, so "gold = pay attention, roof red =
          act now" means the same thing everywhere. */
-      #cpu.warning, #memory.warning     { color: ${css.ochre}; }
-      #cpu.critical, #memory.critical   { color: ${css.alarm}; }
-      #temperature.critical             { color: ${css.alarm}; }
+      #cpu.warning, #memory.warning     { color: @ochre; }
+      #cpu.critical, #memory.critical   { color: @alarm; }
+      #temperature.critical             { color: @alarm; }
 
       tooltip {
-        background: alpha(${css.base}, 0.96);
-        border: 1px solid alpha(${css.haze}, 0.35);
+        background: alpha(@base, 0.96);
+        border: 1px solid alpha(@haze, 0.35);
         border-radius: 8px;
       }
-      tooltip label { color: ${css.text}; }
+      tooltip label { color: @text; }
     '';
   };
 
@@ -1042,18 +1064,22 @@ in
     enable = true;
     topMargin = 0.85;   # near the bottom, out of the way of subtitles
     stylePath = pkgs.writeText "swayosd-style.css" ''
-      /* Same palette as waybar and mako (../theme.nix): dark area from the
-         foreground of the painting, with the horizon haze as the border. */
+      /* Same palette as waybar and swaync: the runtime copy the theme
+         switcher maintains. Absolute path because this file itself lives in
+         the nix store, so a relative @import cannot resolve.
+         Ceiling: swayosd reads this once at startup, so a live theme switch
+         reaches it only after it restarts (next login). */
+      @import url("file://${config.home.homeDirectory}/.config/theme/palette.css");
       window#osd {
         border-radius: 14px;
-        border: 2px solid alpha(${css.haze}, 0.45);
-        background: alpha(${css.ink}, 0.94);
+        border: 2px solid alpha(@haze, 0.45);
+        background: alpha(@ink, 0.94);
       }
       window#osd #container { margin: 16px; }
 
       window#osd image,
       window#osd label {
-        color: ${css.text};
+        color: @text;
       }
 
       window#osd progressbar:disabled,
@@ -1072,7 +1098,7 @@ in
         min-height: inherit;
         border-radius: inherit;
         border: none;
-        background: ${css.overlay};
+        background: @overlay;
       }
       /* Filled part — the same sky colour as the active workspace. */
       window#osd progress,
@@ -1080,7 +1106,7 @@ in
         min-height: inherit;
         border-radius: inherit;
         border: none;
-        background: ${css.sky};
+        background: @sky;
       }
       window#osd segment { margin-left: 8px; }
       window#osd segment:first-child { margin-left: 0; }

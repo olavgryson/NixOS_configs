@@ -22,17 +22,19 @@
 #  manager that remembers your last choice then keeps failing. So only the
 #  working session is offered below.
 ################################################################################
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, hostName, ... }:
 
 let
   wallpaper = import ./wallpaper.nix { inherit pkgs; };
   # The login screen gets the ultrawide render too, otherwise hyprpaper blows
   # the laptop-sized image up to cover it and login looks zoomed in and blurry.
-  wallpaperUltrawide = import ./wallpaper.nix {
+  # Hosts without the docked ultrawide skip it entirely.
+  hasUltrawide = hostName != "probook650";
+  wallpaperUltrawide = if hasUltrawide then import ./wallpaper.nix {
     inherit pkgs;
     width = 3440;
     height = 1440;
-  };
+  } else null;
   inherit (import ./theme.nix { }) raw;
 
   # Match the external monitor by EDID description, NOT by connector name. The
@@ -67,11 +69,13 @@ let
   greeterHyprpaperConf = pkgs.writeText "greeter-hyprpaper.conf" ''
     splash = false
 
-    wallpaper {
-      monitor  = ${externalMonitorDesc}
-      path     = ${wallpaperUltrawide}
-      fit_mode = cover
-    }
+    ${lib.optionalString hasUltrawide ''
+      wallpaper {
+        monitor  = ${externalMonitorDesc}
+        path     = ${wallpaperUltrawide}
+        fit_mode = cover
+      }
+    ''}
 
     wallpaper {
       monitor  = eDP-1
@@ -257,7 +261,7 @@ in
     # Note: ReGreet 0.4 builds its UI programmatically (relm4, no .ui
     # templates), so there are no stable id selectors such as #main-box. Only
     # generic GTK4 nodes below — those are guaranteed to match.
-    # Colours come from ./theme.nix, the same palette as waybar/mako/hyprlock.
+    # Colours come from ./theme.nix, the same palette as waybar/swaync/hyprlock.
     extraCss = ''
       window {
         background-color: alpha(#${raw.ink}, 0.45);

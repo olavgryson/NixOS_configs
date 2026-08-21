@@ -10,8 +10,9 @@
     ./home/desktop/packages.nix     # desktop packages
     ./home/desktop/bar.nix          # waybar + OSD + helper scripts
     ./home/desktop/look.nix         # cursor + GTK
-    ./home/desktop/notifications.nix # mako
+    ./home/desktop/notifications.nix # swaync (popups + control center)
     ./home/desktop/launcher.nix     # rofi + Wi-Fi picker
+    ./home/desktop/theme-switch.nix # runtime palette/wallpaper switcher
     ./home/desktop/daemons.nix      # battery + display-gamma services
     ./home/desktop/screen.nix       # hypridle + hyprlock + hyprpaper
     ./home/desktop/wm.nix           # Hyprland compositor

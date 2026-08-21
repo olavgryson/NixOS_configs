@@ -1,10 +1,10 @@
 ################################################################################
 #  The compositor itself (Hyprland).
 ################################################################################
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, hostName, ... }:
 
 let
-  monitors = import ./monitors.nix { inherit pkgs; };
+  monitors = import ./monitors.nix { inherit pkgs hostName; };
   inherit (monitors) externalMonitor laptopMonitor;
   theme = import ../../theme.nix { };
   inherit (theme) raw;
@@ -22,7 +22,9 @@ in
     settings = {
       "$mod" = "SUPER";
       "$term" = "kitty";
-      "$menu" = "rofi -show drun";
+      # -theme points at the runtime copy of the palette (see theme-switch.nix),
+      # so the launcher recolours on a live theme switch without a rebuild.
+      "$menu" = "rofi -show drun -theme ${config.home.homeDirectory}/.config/theme/rofi.rasi";
       # The zen flake installs the binary as `zen-beta`, not `zen`; with "zen"
       # the $mod+B bind silently does nothing.
       "$browser" = "zen-beta";
@@ -50,11 +52,14 @@ in
       # commit: Device or resource busy", i.e. dropped frames. At 120 that log is
       # clean (measured: 4 failures per 6 s at 144, 0 per 5 s at 120). The link
       # simply does not have the bandwidth.
-      monitor = [
-        externalMonitor
-        laptopMonitor
-        ",preferred,auto,1"          # fallback for unknown screens
-      ];
+      monitor =
+        # dragonflyg4's docked ultrawide first, then the panel; hosts without
+        # an external screen just get the panel plus the fallback line.
+        lib.optionals (monitors.externalMonitor != null) [ monitors.externalMonitor ]
+        ++ [
+          monitors.laptopMonitor
+          ",preferred,auto,1"          # fallback for unknown screens
+        ];
 
       # Without XCURSOR_THEME in the session environment every client looks up
       # "default" and follows ~/.icons/default/index.theme — but which app reads
@@ -90,6 +95,20 @@ in
       # still splits side by side, a half-screen pane splits top/bottom.
       dwindle.split_width_multiplier = 1.5;
 
+      # AI agent scratchpad: a special workspace with generous breathing room,
+      # toggled from anywhere (see the $mod+A bind in ../shortcuts.nix).
+      workspaces = [
+        "special:agent, gapsout:60, gapsin:0"
+      ];
+
+      # Hyprland >= 0.53 unified windowrulev2 into windowrule:
+      # `field value, condition` (conditions last, regex in ^...$).
+      windowrule = [
+        "float on, class:^(agent-scratchpad)$"
+        "size 75% 80%, class:^(agent-scratchpad)$"
+        "center on, class:^(agent-scratchpad)$"
+      ];
+
       decoration = {
         rounding = 8;
         blur = { enabled = true; size = 6; passes = 2; };
@@ -111,7 +130,7 @@ in
       # monitor-hotplug crash or battery-module hang auto-restarts it instead
       # of being gone until the next login.
       exec-once = [
-        "mako"
+        "swaync"
         "wl-paste --watch cliphist store"
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
         # Watches udisks2 (enabled in ../configuration.nix) and auto-mounts USB

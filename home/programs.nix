@@ -1,7 +1,7 @@
 ################################################################################
 #  Configured programs — git, bash, terminal, shell QoL.
 ################################################################################
-{ pkgs, ... }:
+{ pkgs, hostName, ... }:
 {
   #### Git ###################################################################
   programs.git = {
@@ -24,7 +24,7 @@
       cat = "bat -pp";
       clauded = "claude --dangerously-skip-permissions";
       agyd = "agy --dangerously-skip-permissions";
-      rebuild = "sudo nixos-rebuild switch --flake ~/nixos-config#dragonflyg4";
+      rebuild = "sudo nixos-rebuild switch --flake ~/nixos-config#${hostName}";
       # Uses the school Copilot token (COPILOT_GITHUB_TOKEN) for this shell;
       # token itself lives in ~/.config/environment.d/10-copilot.conf, not here.
       copilotschool = "export $(cat ~/.config/environment.d/10-copilot.conf); copilot";

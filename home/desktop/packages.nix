@@ -10,7 +10,7 @@
     # rofi is deliberately NOT listed here: it comes from programs.rofi (bottom
     # of this file) with its own theme. Listing it here as well causes a
     # file collision in home-manager — both want bin/rofi in the same profile.
-    libnotify              # notify-send (mako itself comes from services.mako)
+    libnotify              # notify-send (popups come from services.swaync)
     hyprlock               # screen locker
     grim slurp swappy      # screenshots (+ annotate)
     wl-clipboard cliphist  # clipboard + history

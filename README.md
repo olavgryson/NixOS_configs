@@ -1,4 +1,4 @@
-# nixos-config — dragonflyg4 (HP Dragonfly G4)
+# nixos-config — dragonflyg4 (HP Dragonfly G4) + probook650 (HP ProBook 650 G2)
 
 NixOS + Hyprland, system and Home Manager configuration in one flake. Clone it
 on a fresh install and `nixos-rebuild` builds the whole desktop.
@@ -94,13 +94,16 @@ generation can be selected in systemd-boot.
    sudo nixos-generate-config --root /mnt
    ```
 
-4. Clone this repo, replace `hardware-configuration.nix` with the generated one,
-   and build:
+4. Clone this repo, replace the host's hardware config with the generated one,
+   and build. Each machine has its own `nixosConfigurations` attribute and its
+   own hardware file (`hardware-configuration.nix` for `dragonflyg4`,
+   `hardware-probook650.nix` for `probook650` — that one is a placeholder until
+   replaced by the generated output):
 
    ```bash
    git clone <this repo> ~/nixos-config
-   cp /mnt/etc/nixos/hardware-configuration.nix ~/nixos-config/
-   sudo nixos-install --flake ~/nixos-config#dragonflyg4
+   cp /mnt/etc/nixos/hardware-configuration.nix ~/nixos-config/hardware-probook650.nix
+   sudo nixos-install --flake ~/nixos-config#probook650
    ```
 
 5. After first boot: set a real password with `passwd` (the config ships
@@ -109,18 +112,22 @@ generation can be selected in systemd-boot.
    for `pass`, and browser profiles.
 
 Keybinds to get started: `SUPER+Return` terminal, `SUPER+Space` launcher,
-`SUPER+B` browser, `SUPER+L` lock. Full list in `home/shortcuts.nix`.
+`SUPER+B` browser, `SUPER+L` lock, `SUPER+A` AI agent scratchpad,
+`SUPER+/` searchable keybinding cheat sheet. Full list in `home/shortcuts.nix`
+or press `SUPER+/`.
 
 ## Changing the look
 
-**Wallpaper:** put the image in `wallpapers/`, **`git add` it**, and point `src`
-in `wallpaper.nix` at it. Login screen, desktop (hyprpaper) and lock screen
-(hyprlock) all share that one image.
+**Wallpaper + colours at runtime:** run `theme-switch` (or bind it in rofi) to
+pick between the wallpapers in `wallpapers/`; each ships with its own palette
+and the switch applies live — wallpaper, window borders, rofi and waybar —
+without a rebuild. The choice persists across reboots and rebuilds. Lock
+screen, login screen and SwayNC keep the build-time default palette.
 
-**Colours:** `theme.nix` holds the palette sampled from the current wallpaper.
-Waybar, mako, SwayOSD, rofi, hyprlock, the window borders and the login screen
-all read from it, so one hex change propagates everywhere. After a wallpaper
-swap, resample with:
+**Build-time defaults:** `theme.nix` holds the palettes sampled from the
+wallpapers. Waybar, SwayNC, SwayOSD, rofi, hyprlock, the window borders and the
+login screen all read from it, so one hex change propagates everywhere. After
+adding a wallpaper, resample with:
 
 ```bash
 magick wallpapers/your-wallpaper.jpg -resize 200x -colors 16 -unique-colors txt:

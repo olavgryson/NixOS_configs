@@ -3,9 +3,16 @@
 #  (Hyprland/Wayland desktop packages live in ./desktop.nix.)
 #  home.packages merges across modules, so this list is desktop-free on purpose.
 ################################################################################
-{ pkgs, inputs, ... }:
+{ pkgs, inputs, hostName, lib, ... }:
+let
+  # idea-oss has no cached binary on some nixpkgs snapshots and then compiles
+  # from source, which OOMs the small-RAM machines. Keep it on the big laptop
+  # only; re-enable per host if a snapshot with a cached build lands.
+  bigMachine = hostName == "dragonflyg4";
+in
 {
-  home.packages = with pkgs; [
+  home.packages = with pkgs;
+    [
     ## --- the thing you want first ---
     # claude-code: nixpkgs lags behind Claude's release cadence (ships 2.1.234
     # while upstream is at 2.1.237), so pin the tarball ourselves. To bump:
@@ -48,7 +55,6 @@
     ## --- editors / IDEs ---
     vscode
     neovim
-    jetbrains.idea-oss                 # IntelliJ IDEA (open-source build; idea-community discontinued)
     tmux
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
@@ -94,7 +100,10 @@
     ## --- wine / gaming extras ---
     # wineWowPackages.stable           # DISABLED: source compile, see above
     winetricks
-  ];
+  ]
+  # IntelliJ IDEA (open-source build; idea-community discontinued). Big
+  # machine only — see `bigMachine` above.
+  ++ lib.optionals bigMachine [ jetbrains.idea-oss ];
 
   ## --- mpv: hardware video decoding on the Iris Xe (VAAPI/iHD) -------------
   #  mpv defaults to hwdec=no, so 1080p HEVC was decoded entirely on the CPU

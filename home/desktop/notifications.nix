@@ -1,81 +1,147 @@
 ################################################################################
-#  Notifications (mako), Pirna Bellotto style.
+#  Notifications: SwayNC — popups plus a control center with a DND toggle.
+#  Replaces mako; notify-send callers (volume/brightness OSD scripts in
+#  ../shortcuts.nix) work unchanged, since SwayNC implements the freedesktop
+#  Notifications interface.
+#
+#  Colours are baked from the build-time default palette in ../theme.nix.
+#  Ceiling: unlike waybar, this stylesheet does not follow a live theme
+#  switch — SwayNC's CSS handling of @import/@define-color could not be
+#  verified, and an unparseable stylesheet would leave notifications
+#  completely unstyled. A rebuild re-bakes whatever palette is default.
 ################################################################################
 { pkgs, lib, config, ... }:
 
 let
   theme = import ../../theme.nix { };
   inherit (theme) raw;
-
 in
 {
-  #### Notifications (Pirna Bellotto Classical Theme) #########################
-  # Notification popups styled after Bernardo Bellotto's "Pirna" oil painting.
-  # Uses sunlit sandstone gold border accents, canvas dark transparency, and
-  # Pango markup ornaments for a classic gallery plaque feel.
-  services.mako = {
+  services.swaync = {
     enable = true;
+
     settings = {
-      default-timeout = 6000;
+      # Popups top-right, above fullscreen content.
+      positionX = "right";
+      positionY = "top";
       layer = "overlay";
-      anchor = "top-right";
-      margin = "14";
-      padding = "14,18";
-      width = 420;
-      height = 200;
-      border-size = 2;
-      border-radius = 12;
-      font = "JetBrainsMono Nerd Font 10";
+      control-center-layer = "top";
 
-      # Color palette sampled from Bellotto's Pirna (../theme.nix)
-      background-color = "#${raw.ink}f4";
-      text-color = "#${raw.text}";
-      border-color = "#${raw.stone}dd";
-      progress-color = "over #${raw.stone}cc";
-      icons = true;
-      max-icon-size = 48;
-      icon-border-radius = 8;
+      notification-width = 420;
+      notification-icon-size = 48;
+      control-center-width = 500;
 
-      # Pango markup format string giving notifications an elegant gallery plaque layout
-      format = "<span size=\"x-small\" foreground=\"#${raw.sky}\">⚜  <b>%a</b></span>\\n<span font_weight=\"bold\" size=\"11000\" foreground=\"#${raw.stone}\">%s</span>\\n<span size=\"9500\" foreground=\"#${raw.text}\">%b</span>";
+      # Same timeouts as before: 6 s default, critical stays until dismissed.
+      timeout = 6;
+      timeout-low = 5;
+      critical-timeout = 0;
 
-      # Low urgency (subtle parchment grey/green haze)
-      "urgency=low" = {
-        background-color = "#${raw.base}f0";
-        border-color = "#${raw.overlay}ee";
-        default-timeout = 4000;
-        format = "<span size=\"x-small\" foreground=\"#${raw.muted}\">📜  %a</span>\\n<span font_weight=\"bold\" size=\"10500\" foreground=\"#${raw.subtle}\">%s</span>\\n<span size=\"9500\" foreground=\"#${raw.subtle}\">%b</span>";
-      };
-
-      # Critical urgency (terracotta alarm red, stays until dismissed)
-      "urgency=critical" = {
-        background-color = "#1a0e0bf8";
-        border-color = "#${raw.alarm}";
-        default-timeout = 0;
-        format = "<span size=\"x-small\" foreground=\"#${raw.alarm}\">⚔️  <b>%a</b>  •  <small>CRITICAL</small></span>\\n<span font_weight=\"bold\" size=\"11000\" foreground=\"#${raw.stone}\">%s</span>\\n<span size=\"9500\" foreground=\"#${raw.text}\">%b</span>";
-      };
-
-      # Fast & sleek OSD popup styling for Volume, Brightness, and Microphone
-      "app-name=Volume" = {
-        default-timeout = 1500;
-        width = 340;
-        height = 140;
-        format = "<span size=\"x-small\" foreground=\"#${raw.sky}\">🔊  <b>Volume</b></span>\\n<span font_weight=\"bold\" size=\"12000\" foreground=\"#${raw.stone}\">%b</span>";
-      };
-
-      "app-name=Brightness" = {
-        default-timeout = 1500;
-        width = 340;
-        height = 140;
-        format = "<span size=\"x-small\" foreground=\"#${raw.stone}\">☀️  <b>Brightness</b></span>\\n<span font_weight=\"bold\" size=\"12000\" foreground=\"#${raw.stone}\">%b</span>";
-      };
-
-      "app-name=Microphone" = {
-        default-timeout = 1500;
-        width = 340;
-        height = 140;
-        format = "<span size=\"x-small\" foreground=\"#${raw.terra}\">🎙️  <b>Microphone</b></span>\\n<span font_weight=\"bold\" size=\"12000\" foreground=\"#${raw.stone}\">%b</span>";
+      # Control center: title row with a clear-all button, DND toggle, then
+      # the notification list. Deliberately nothing else.
+      widgets = [
+        "title"
+        "dnd"
+        "notifications"
+      ];
+      widget-config = {
+        title = {
+          text = "Notifications";
+          clear-all-button = true;
+          button-text = "Clear";
+        };
+        dnd.text = "Do Not Disturb";
       };
     };
+
+    style = ''
+      /* Pill language shared with waybar: dark translucent surfaces, rounded
+         corners, sky accent, alarm red for critical. */
+      .notification {
+        background: alpha(#${raw.base}, 0.94);
+        border-radius: 14px;
+        border: 1px solid alpha(#${raw.overlay}, 0.9);
+        padding: 10px;
+        margin: 8px;
+      }
+      .notification-content {
+        background: transparent;
+      }
+      .notification-default-action,
+      .notification-action {
+        background: transparent;
+        border-radius: 10px;
+      }
+      .notification-default-action:hover,
+      .notification-action:hover {
+        background: alpha(#${raw.surface}, 0.9);
+      }
+
+      .summary {
+        color: #${raw.stone};
+        font-weight: bold;
+      }
+      .body {
+        color: #${raw.text};
+      }
+      .app-name {
+        color: #${raw.subtle};
+        font-size: 9px;
+      }
+      .time {
+        color: #${raw.muted};
+        font-size: 9px;
+      }
+      image {
+        color: #${raw.sky};
+      }
+
+      /* Urgency levels. */
+      .low .notification {
+        border-color: alpha(#${raw.overlay}, 0.6);
+      }
+      .low .summary, .low .body { color: #${raw.subtle}; }
+      .critical .notification {
+        border: 2px solid #${raw.alarm};
+      }
+      .critical .summary { color: #${raw.alarm}; }
+
+      /* Control center panel. */
+      .control-center {
+        background: alpha(#${raw.ink}, 0.96);
+        border-radius: 16px;
+        border: 1px solid alpha(#${raw.haze}, 0.35);
+        margin: 10px;
+      }
+      .widget-title {
+        color: #${raw.stone};
+        font-size: 13px;
+        padding: 10px 12px 4px;
+      }
+      .widget-title > button {
+        background: alpha(#${raw.surface}, 0.9);
+        color: #${raw.text};
+        border-radius: 999px;
+        padding: 4px 12px;
+      }
+      .widget-title > button:hover {
+        background: #${raw.sky};
+        color: #${raw.ink};
+      }
+      .widget-dnd {
+        padding: 8px 12px;
+      }
+      .widget-dnd > switch {
+        background: #${raw.overlay};
+        border-radius: 999px;
+        min-height: 20px;
+        min-width: 38px;
+      }
+      .widget-dnd > switch:checked {
+        background: #${raw.sky};
+      }
+      .blank-window {
+        background: transparent;
+      }
+    '';
   };
 }

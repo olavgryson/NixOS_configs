@@ -1,10 +1,10 @@
 ################################################################################
 #  Lock, idle and wallpaper: hypridle, hyprlock, hyprpaper.
 ################################################################################
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, hostName, ... }:
 
 let
-  monitors = import ./monitors.nix { inherit pkgs; };
+  monitors = import ./monitors.nix { inherit pkgs hostName; };
   inherit (monitors) wallpaper wallpaperUltrawide externalMonitorDesc;
   theme = import ../../theme.nix { };
   inherit (theme) raw;
@@ -104,23 +104,25 @@ in
     enable = true;
     settings = {
       splash = false;
-      wallpaper = [
-        {
-          monitor = "${externalMonitorDesc}";
-          path = "${wallpaperUltrawide}";
-          fit_mode = "cover";
-        }
-        {
-          monitor = "eDP-1";
-          path = "${wallpaper}";
-          fit_mode = "cover";
-        }
-        {
-          monitor = "";
-          path = "${wallpaper}";
-          fit_mode = "cover";
-        }
-      ];
+      wallpaper =
+        lib.optionals (externalMonitorDesc != null) [
+          {
+            monitor = "${externalMonitorDesc}";
+            path = "${wallpaperUltrawide}";
+            fit_mode = "cover";
+          }
+        ] ++ [
+          {
+            monitor = "eDP-1";
+            path = "${wallpaper}";
+            fit_mode = "cover";
+          }
+          {
+            monitor = "";
+            path = "${wallpaper}";
+            fit_mode = "cover";
+          }
+        ];
     };
   };
   # Configured here rather than only installed: without a config hyprlock falls

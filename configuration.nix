@@ -1,19 +1,21 @@
 ################################################################################
-#  System configuration for dragonflyg4 (HP Dragonfly G4)
+#  System configuration shared by all hosts (dragonflyg4, probook650).
+#  Machine-specific blocks are guarded on `hostName` (passed in from
+#  ./flake.nix); the generated hardware-configuration files carry the rest.
 ################################################################################
-{ config, pkgs, lib, inputs, ... }:
+{ config, pkgs, lib, inputs, hostName, ... }:
 
 let
   # One fixed, argument-less rebuild command. Deliberately a script rather than
   # a sudoers rule with loose arguments, for two reasons:
-  #   1. A sudoers rule like `nixos-rebuild switch --flake /path#dragonflyg4`
-  #      does not work: '#' starts a comment in sudoers, so the flake attribute
+  #   1. A sudoers rule like `nixos-rebuild switch --flake /path#<host>` does
+  #      not work: '#' starts a comment in sudoers, so the flake attribute
   #      would silently disappear and the rule would never match.
   #   2. With no arguments there is nothing to vary — no other flake path, no
   #      subcommand other than `switch`.
   nixosRebuildSwitch = pkgs.writeShellScript "nixos-rebuild-switch" ''
     exec /run/current-system/sw/bin/nixos-rebuild switch \
-      --flake path:/home/ogryson/nixos-config#dragonflyg4
+      --flake path:/home/ogryson/nixos-config#${hostName}
   '';
 
   # Brain auto-sync must run as ogryson (git/agy need the user's SSH key, home
@@ -22,6 +24,9 @@ let
   # clock is 16:00-19:59.
   brainPush =
     "/run/current-system/sw/bin/runuser -u ogryson -- /home/ogryson/.local/bin/push-brain.sh --window";
+
+  # Machine-specific tuning below is guarded on this flag.
+  isDragonfly = hostName == "dragonflyg4";
 in
 
 {
@@ -51,7 +56,7 @@ in
     builtins.elem (lib.getName pkg) [ "idea-oss" ];
 
   #### Identity / locale ######################################################
-  networking.hostName = "dragonflyg4";
+  networking.hostName = hostName;
   time.timeZone = "Europe/Brussels";
   i18n.defaultLocale = "en_GB.UTF-8";
   i18n.extraLocaleSettings = {
@@ -195,9 +200,10 @@ in
   #### Swap + hibernate #######################################################
   # zram = fast compressed RAM swap for daily use.
   # The on-disk SWAP partition (>= RAM, see README) is the hibernate image
-  # target.
+  # target. Hibernation tuning is dragonflyg4-only: its firmware needs the
+  # workarounds below; other hosts use plain defaults until proven otherwise.
   zramSwap.enable = true;
-  boot.resumeDevice = "/dev/disk/by-label/SWAP";
+  boot.resumeDevice = lib.mkIf isDragonfly "/dev/disk/by-label/SWAP";
   # swapDevices for the SWAP partition is normally written by
   # nixos-generate-config (run `swapon /dev/disk/by-label/SWAP` before
   # generating). If it isn't, uncomment:
@@ -272,9 +278,10 @@ in
   # the behaviour we do not want.
   services.logind.settings.Login.HandleLidSwitchDocked = "ignore";
 
-  # Sleep tuning. Both settings below work around firmware behaviour on this
-  # machine that was killing the battery overnight; see the diagnosis in each.
-  systemd.sleep.settings.Sleep = {
+  # Sleep tuning. Both settings below work around firmware behaviour on the
+  # dragonflyg4 that was killing the battery overnight; see the diagnosis in
+  # each. Other hosts keep the defaults.
+  systemd.sleep.settings.Sleep = lib.mkIf isDragonfly {
     # After 30 min of plain suspend, move the session to disk and power off.
     HibernateDelaySec = "30min";
 
@@ -338,7 +345,7 @@ in
   };
 
   #### External backup disk ###################################################
-  # Kingston SV300S37A240G, 240G, ext4, label `backup`.
+  # Kingston SV300S37A240G, 240G, ext4, label `backup`. dragonflyg4 only.
   #
   # Mounted on demand instead of at boot. With a plain `nofail` +
   # device-timeout, every boot without the disk plugged in still waited for it
@@ -348,7 +355,7 @@ in
   #     Dependency failed for /mnt/backup.
   # `noauto` + `x-systemd.automount` moves the mount to first access: nothing
   # happens at boot, and touching /mnt/backup mounts the disk if it is there.
-  fileSystems."/mnt/backup" = {
+  fileSystems."/mnt/backup" = lib.mkIf isDragonfly {
     device = "/dev/disk/by-uuid/8b16bf94-9d1d-4923-8b0d-75f4921ea144";
     fsType = "ext4";
     options = [
