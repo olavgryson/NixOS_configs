@@ -219,7 +219,7 @@ in
   services.displayManager.sessionPackages = lib.mkForce [ hyprlandSession ];
 
   #### ReGreet #################################################################
-  programs.regreet = {
+  services.displayManager.regreet = {
     enable = true;
 
     theme = {

@@ -72,7 +72,7 @@
     ## --- editors / IDEs ---
     vscode
     neovim
-    jetbrains.idea-oss                 # IntelliJ IDEA (open-source build; idea-community discontinued)
+    # jetbrains.idea-oss                 # DISABLED: source compile on current snapshot
     tmux
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
@@ -98,7 +98,7 @@
     spotify
     vlc                                # mpv is not here: see programs.mpv below
     obs-studio
-    libreoffice-fresh hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
+    libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
     angryipscanner                     # network scanner GUI
     handy                              # local Whisper push-to-talk dictation, fully offline
     upscayl                            # AI image upscaler GUI
