@@ -19,7 +19,31 @@
       };
     }))
     codex                              # OpenAI Codex, terminal coding agent
-    opencode                           # AI coding agent, terminal
+    # opencode: upstream releases move fast, so pin the binary tarball
+    # directly. To bump: update version + sha256 from github releases.
+    (stdenv.mkDerivation rec {
+      pname = "opencode";
+      version = "1.18.21";
+      src = fetchurl {
+        url = "https://github.com/anomalyco/opencode/releases/download/v${version}/opencode-linux-x64.tar.gz";
+        sha256 = "12mkjnljc15bk4qhwivb79ymphhwshald418lf8mgfqkfvnw646r";
+      };
+      nativeBuildInputs = [ autoPatchelfHook makeBinaryWrapper ];
+      buildInputs = [ stdenv.cc.cc.lib ];
+      sourceRoot = ".";
+      dontStrip = true;
+      installPhase = ''
+        install -Dm755 opencode $out/bin/opencode
+        wrapProgram $out/bin/opencode \
+          --prefix PATH : ${lib.makeBinPath [ ripgrep ]} \
+          --set OPENCODE_DISABLE_AUTOUPDATE true
+      '';
+      meta = {
+        description = "AI coding agent built for the terminal";
+        homepage = "https://github.com/anomalyco/opencode";
+        mainProgram = "opencode";
+      };
+    })
     github-copilot-cli                 # GitHub Copilot, terminal
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
@@ -70,6 +94,7 @@
       exec ${pkgs.obsidian}/bin/obsidian --force-dark-mode "$@"
     '')
     discord
+    gnome-calculator                    # GUI calculator
     spotify
     vlc                                # mpv is not here: see programs.mpv below
     obs-studio

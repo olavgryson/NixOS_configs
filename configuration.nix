@@ -39,11 +39,15 @@ in
   boot.loader.systemd-boot.configurationLimit = 10;   # keep ESP from overflowing
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = pkgs.linuxPackages_latest;     # good Raptor Lake support
+  # fwupd (LVFS): `fwupdmgr refresh && fwupdmgr update` for BIOS/SSD/Thunderbolt
+  # firmware. HP ships this machine's BIOS as a signed UEFI capsule, so updates
+  # install straight from Linux — no Windows or bootable USB needed.
+  services.fwupd.enable = true;
 
   #### Nix #####################################################################
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.auto-optimise-store = true;
-  nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 30d"; };
+  nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 7d"; };
   nixpkgs.config.allowUnfree = true;   # spotify, vscode, discord, steam, obsidian...
   # IntelliJ IDEA (idea-oss) is flagged insecure over a CVE in the bundled
   # JetBrains runtime. Allowed by name, so it survives version bumps.
@@ -65,6 +69,10 @@ in
   #### Networking #############################################################
   networking.networkmanager.enable = true;
   services.tailscale.enable = true;
+  programs.localsend = {
+    enable = true;
+    openFirewall = true;
+  };
 
   #### Graphics (Intel Iris Xe / Raptor Lake) #################################
   hardware.graphics = {
@@ -244,6 +252,20 @@ in
     echo "battery after resume: $(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/capacity)% ($(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/status))"
   '';
   services.power-profiles-daemon.enable = true;
+  # Intel thermal daemon: keeps the CPU out of thermal throttle zones and
+  # parks cores in deeper C-states when idle. Standard on every Intel laptop
+  # distro; without it Raptor Lake runs hotter and burns more wattage.
+  services.thermald.enable = true;
+
+  # Radio power saving for Wi-Fi while associated. Negligible latency cost,
+  # meaningful idle draw reduction on battery.
+  networking.networkmanager.wifi.powersave = true;
+
+  # Let the HDA codec drop into D3 when no stream is open (~0.5 W saved).
+  # PipeWire releases devices when idle, so this engages between sounds.
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=1
+  '';
 
   #### Power Management & UPower Daemon #######################################
   services.upower = {
