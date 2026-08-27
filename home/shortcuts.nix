@@ -142,6 +142,7 @@ let
   # numbers (bitfield: SHIFT=1 CTRL=4 ALT=8 SUPER=64); jq turns them into names
   # so the list reads like documentation instead of a bitmask dump. Plain
   # dmenu mode: picking an entry just prints it, which we discard.
+  # -theme: the runtime palette copy (see ./desktop/theme-switch.nix), so the sheet matches whatever theme is active.
   keybindCheatSheet = pkgs.writeShellScript "keybinding-cheatsheet" ''
     ${pkgs.hyprland}/bin/hyprctl binds -j \
       | ${pkgs.jq}/bin/jq -r '
@@ -159,8 +160,6 @@ let
                 then (.dispatcher + " " + .arg)
                 else .description end))]
           | sort | join("\n")' \
-      # -theme: the runtime palette copy (see ./desktop/theme-switch.nix), so
-      # the sheet matches whatever theme is active.
       | ${pkgs.rofi}/bin/rofi -dmenu -i -p Keybindings \
           -theme ${homeDir}/.config/theme/rofi.rasi >/dev/null
   '';
