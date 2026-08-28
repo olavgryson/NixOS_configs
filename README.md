@@ -24,7 +24,10 @@ home/
   desktop.nix               Hyprland + Wayland desktop (packages and config)
   shortcuts.nix             Hyprland keyboard and mouse bindings
   webapps.nix               PWA launchers (SoundCloud, Snapchat)
+disko/
+  laptop-luks.nix           declarative disk layout: LUKS2 + btrfs subvolumes
 docs/
+  installation.md           full install procedure (encrypted disk, per host)
   hibernation-ipu6.md       why hibernation aborts on this machine (IPU6 camera)
 ```
 
@@ -53,68 +56,11 @@ generation can be selected in systemd-boot.
 
 ## Installing on a fresh machine
 
-1. Boot the NixOS **minimal** ISO (UEFI, secure boot off). No desktop needed —
-   the desktop comes from this config.
-
-2. Partition. Swap must be ≥ RAM for hibernation to have somewhere to go:
-
-   ```bash
-   sudo wipefs -a /dev/nvme0n1
-   sudo parted /dev/nvme0n1 -- mklabel gpt
-   sudo parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 1GiB   # 512M is too tight
-   sudo parted /dev/nvme0n1 -- set 1 esp on
-   sudo parted /dev/nvme0n1 -- mkpart swap linux-swap 1GiB 18GiB
-   sudo parted /dev/nvme0n1 -- mkpart primary 18GiB 100%
-   sudo mkfs.fat -F32 -n BOOT /dev/nvme0n1p1
-   sudo mkswap -L SWAP /dev/nvme0n1p2
-   sudo swapon /dev/nvme0n1p2      # leave ON so generate-config picks up swapDevices
-   sudo mkfs.btrfs -L NIXOS /dev/nvme0n1p3
-   ```
-
-   Btrfs subvolumes:
-
-   ```bash
-   sudo mount /dev/nvme0n1p3 /mnt
-   sudo btrfs subvolume create /mnt/@
-   sudo btrfs subvolume create /mnt/@home
-   sudo btrfs subvolume create /mnt/@nix
-   sudo umount /mnt
-   OPTS=compress=zstd,noatime
-   sudo mount -o subvol=@,$OPTS /dev/nvme0n1p3 /mnt
-   sudo mkdir -p /mnt/{home,nix,boot}
-   sudo mount -o subvol=@home,$OPTS /dev/nvme0n1p3 /mnt/home
-   sudo mount -o subvol=@nix,$OPTS   /dev/nvme0n1p3 /mnt/nix
-   sudo mount /dev/nvme0n1p1 /mnt/boot
-   ```
-
-3. Generate the hardware config — the one file this repo cannot provide, since
-   it holds the real disk UUIDs, kernel modules and `fileSystems`:
-
-   ```bash
-   sudo nixos-generate-config --root /mnt
-   ```
-
-4. Clone this repo, replace the host's hardware config with the generated one,
-   and build. Each machine has its own `nixosConfigurations` attribute and its
-   own hardware file (`hardware-configuration.nix` for `dragonflyg4`,
-   `hardware-probook650.nix` for `probook650` — that one is a placeholder until
-   replaced by the generated output):
-
-   ```bash
-   git clone <this repo> ~/nixos-config
-   cp /mnt/etc/nixos/hardware-configuration.nix ~/nixos-config/hardware-probook650.nix
-   sudo nixos-install --flake ~/nixos-config#probook650
-   ```
-
-5. After first boot: set a real password with `passwd` (the config ships
-   `initialPassword = "changeme"`), and restore what deliberately lives outside
-   this repo — `~/.ssh/`, WiFi credentials, `~/.gnupg/` + `~/.password-store/`
-   for `pass`, and browser profiles.
-
-Keybinds to get started: `SUPER+Return` terminal, `SUPER+Space` launcher,
-`SUPER+B` browser, `SUPER+L` lock, `SUPER+A` AI agent scratchpad,
-`SUPER+/` searchable keybinding cheat sheet. Full list in `home/shortcuts.nix`
-or press `SUPER+/`.
+Full procedure — backup, disk layout, LUKS encryption, `nixos-install` — lives
+in [`docs/installation.md`](docs/installation.md). Partitioning is declarative:
+`disko/laptop-luks.nix` formats the disk in one command, parameterised on
+device and swap size, so every host gets the same encrypted btrfs layout and
+only `hardware-<host>.nix` differs.
 
 ## Changing the look
 
