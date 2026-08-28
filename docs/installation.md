@@ -46,12 +46,15 @@ On an external disk, and **verified before anything is wiped**:
    picking the branch to install:
 
    ```bash
-   mkdir -p /mnt-usb                             # not /mnt, that is the target disk
-   mount /dev/disk/by-label/Ventoy /mnt-usb      # by-label: sda1 vs sdb1 does not matter
+   sudo mkdir -p /mnt-usb                            # not /mnt, that is the target disk
+   sudo mount -o ro /dev/disk/by-label/Ventoy /mnt-usb  # by-label: sda1 vs sdb1 does not matter
    nix-shell -p git
-   git clone -b master /mnt-usb/nixos-config /root/nixos-config
-   cd /root/nixos-config
+   git clone -b master /mnt-usb/nixos-config ~/nixos-config
+   cd ~/nixos-config
    ```
+
+   The installer logs in as the unprivileged user `nixos`, so these need
+   `sudo`. Read-only mount: the same stick is usually the boot medium.
 
    Without a stick, and only for a machine whose hardware file is already in the
    repo: `nixos-install --flake github:<owner>/<repo>/<branch>#<host>` reads the
