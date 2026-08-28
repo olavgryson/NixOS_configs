@@ -146,12 +146,22 @@ everything else stays as `nixos-generate-config` wrote it.
 new machine needs its own entry there, and its own hardware file, before this
 works.
 
+Install from the clone made in step 1 — there is nothing left to clone here:
+
 ```bash
-git clone /run/media/EXT/nixos-config /mnt/home/ogryson/nixos-config
-cd /mnt/home/ogryson/nixos-config
+cd ~/nixos-config
 cp /mnt/etc/nixos/hardware-configuration.nix ./hardware-configuration.nix
 git add .                                  # flakes only read git-tracked files
 sudo nixos-install --flake .#<host> --no-root-passwd
+```
+
+Then put the config on the installed system, or the first `rebuild` after boot
+has nothing to build from:
+
+```bash
+sudo mkdir -p /mnt/home/ogryson
+sudo cp -a ~/nixos-config /mnt/home/ogryson/
+sudo chown -R 1000:100 /mnt/home/ogryson    # uid 1000 / gid 100 = ogryson:users
 ```
 
 Reboot, remove the USB stick. The LUKS passphrase prompt appears before the
