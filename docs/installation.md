@@ -41,8 +41,21 @@ On an external disk, and **verified before anything is wiped**:
    desktop is built from this config.
 2. Boot it in UEFI mode, secure boot off.
 3. Network: `nmtui` (or `wpa_supplicant`), then confirm with `ping nixos.org`.
-4. Get the repo onto the machine (external disk or `git clone`), and `cd` into
-   it — the next step reads the layout from there.
+4. Get the repo onto the machine. Nothing is auto-mounted here — no udisks
+   runs in the installer — so mount the USB stick by label and clone from it,
+   picking the branch to install:
+
+   ```bash
+   mkdir -p /mnt-usb                             # not /mnt, that is the target disk
+   mount /dev/disk/by-label/Ventoy /mnt-usb      # by-label: sda1 vs sdb1 does not matter
+   nix-shell -p git
+   git clone -b master /mnt-usb/nixos-config /root/nixos-config
+   cd /root/nixos-config
+   ```
+
+   Without a stick, and only for a machine whose hardware file is already in the
+   repo: `nixos-install --flake github:<owner>/<repo>/<branch>#<host>` reads the
+   flake straight from GitHub, branch included in the URL.
 
 ---
 
