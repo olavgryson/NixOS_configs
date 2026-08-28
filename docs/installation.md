@@ -41,24 +41,24 @@ On an external disk, and **verified before anything is wiped**:
    desktop is built from this config.
 2. Boot it in UEFI mode, secure boot off.
 3. Network: `nmtui` (or `wpa_supplicant`), then confirm with `ping nixos.org`.
-4. Get the repo onto the machine. Nothing is auto-mounted here — no udisks
-   runs in the installer — so mount the USB stick by label and clone from it,
-   picking the branch to install:
+4. Get the repo onto the machine, picking the branch to install:
 
    ```bash
-   sudo mkdir -p /mnt-usb                            # not /mnt, that is the target disk
-   sudo mount -o ro /dev/disk/by-label/Ventoy /mnt-usb  # by-label: sda1 vs sdb1 does not matter
    nix-shell -p git
-   git clone -b master /mnt-usb/nixos-config ~/nixos-config
+   git clone -b master https://github.com/olavgryson/NixOS_configs.git ~/nixos-config
    cd ~/nixos-config
    ```
 
-   The installer logs in as the unprivileged user `nixos`, so these need
-   `sudo`. Read-only mount: the same stick is usually the boot medium.
+   The install needs the network anyway — `nixos-install` pulls everything from
+   `cache.nixos.org` — so cloning from GitHub is simpler than carrying the repo
+   on the stick. Set the remote back to SSH after the install:
+   `git remote set-url origin git@github.com:olavgryson/NixOS_configs.git`.
 
-   Without a stick, and only for a machine whose hardware file is already in the
-   repo: `nixos-install --flake github:<owner>/<repo>/<branch>#<host>` reads the
-   flake straight from GitHub, branch included in the URL.
+   **A Ventoy stick cannot serve as the repo drive.** While Ventoy is serving
+   the ISO, device-mapper holds the whole disk open exclusively, so mounting its
+   data partition fails with `can't open blockdev`, read-only included. Offline
+   installs need a *second* stick, or the ISO written to a plain stick with `dd`
+   so Ventoy is free to be mounted.
 
 ---
 
