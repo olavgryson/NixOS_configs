@@ -118,11 +118,13 @@ or press `SUPER+/`.
 
 ## Changing the look
 
-**Wallpaper + colours at runtime:** run `theme-switch` (or bind it in rofi) to
-pick between the wallpapers in `wallpapers/`; each ships with its own palette
-and the switch applies live — wallpaper, window borders, rofi and waybar —
-without a rebuild. The choice persists across reboots and rebuilds. Lock
-screen, login screen and SwayNC keep the build-time default palette.
+**Wallpaper + colours at runtime:** two rofi menus. `theme-switch` picks the
+UI palette (Catppuccin Mocha or Tokyo Night, both Omarchy-style) and `wallpaper-switch`
+picks the desktop image — each from the wallpapers in `wallpapers/`. The
+choices persist across reboots and rebuilds, and the live-switchable parts
+(waybar, Hyprland borders, rofi, hyprpaper) follow instantly. The lock
+screen, login screen, SwayNC and SwayOSD keep the build-time default palette
+and follow a rebuild.
 
 **Build-time defaults:** `theme.nix` holds the palettes sampled from the
 wallpapers. Waybar, SwayNC, SwayOSD, rofi, hyprlock, the window borders and the
