@@ -7,17 +7,10 @@
 {
   home.packages = with pkgs; [
     ## --- the thing you want first ---
-    # claude-code: nixpkgs lags behind Claude's release cadence (ships 2.1.234
-    # while upstream is at 2.1.237), so pin the tarball ourselves. To bump:
-    # `nix-prefetch-url --type sha256 <releases-url>/<version>/linux-x64/claude`
-    # and update version+sha256 here.
-    (claude-code.overrideAttrs (old: {
-      version = "2.1.237";
-      src = pkgs.fetchurl {
-        url = "https://downloads.claude.ai/claude-code-releases/2.1.237/linux-x64/claude";
-        sha256 = "05irzfmk91s58z9gbgkf8nwfnmqng2a4jqfndz7r71hhy1km35vk";
-      };
-    }))
+    # claude-code comes from nixpkgs, which tracks Claude's release cadence.
+    # Do NOT pin the tarball with overrideAttrs: upstream changes the binary
+    # format without notice and a pinned fetchurl then stops unpacking.
+    claude-code                        # Anthropic Claude, terminal coding agent
     codex                              # OpenAI Codex, terminal coding agent
     # opencode: upstream releases move fast, so pin the binary tarball
     # directly. To bump: update version + sha256 from github releases.
