@@ -237,10 +237,12 @@ in
       "SHIFT, Print, exec, grim - | wl-copy"                  # whole screen -> clipboard
 
       # ── Voice dictation (fully local) ──────────────────────────────────
-      # Vosk (streaming): $mod+F5 starts, $mod+F6 stops and types as you go.
-      # Whisper (toggle): $mod+F7 records; press again to transcribe and type.
-      "$mod, F5, exec, ${homeDir}/.local/dict/vosk-begin.sh"
-      "$mod, F6, exec, ${homeDir}/.local/dict/vosk-end.sh"
+      # Whisper large-v3-turbo on the GPU, Dutch, in two modes.
+      # $mod+F5 toggles live mode: text appears per sentence, as you speak.
+      # $mod+F7 records; press again to transcribe the whole take at once.
+      # F7 is the accurate one — it gives Whisper the full utterance as
+      # context, where live mode only ever sees the last few seconds.
+      "$mod, F5, exec, ${homeDir}/.local/dict/stream-dict.sh"
       "$mod, F7, exec, ${homeDir}/.local/dict/whisper-dict.sh"
     ]
     # Workspace 1..10 on the number row.

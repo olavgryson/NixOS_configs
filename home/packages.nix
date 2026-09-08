@@ -93,7 +93,13 @@
     obs-studio
     libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
     angryipscanner                     # network scanner GUI
-    handy                              # local Whisper push-to-talk dictation, fully offline
+    # Dictation stack (~/.local/dict, bound to $mod+F5 and $mod+F7).
+    # whisper-cpp-vulkan, not plain whisper-cpp: the Iris Xe GPU runs
+    # large-v3-turbo ~2.7x realtime where the CPU backend needs 8x realtime,
+    # and the CPU backend's repacked-quant path returns token soup for the
+    # q5_0 large models — same file transcribes correctly on Vulkan.
+    whisper-cpp-vulkan                 # whisper-cli, GPU-accelerated
+    wtype                              # types the transcript into the focused window
     upscayl                            # AI image upscaler GUI
 
     ## --- creative / 3D / making ---
