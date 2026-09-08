@@ -13,6 +13,10 @@
     };
   };
 
+  # Tools installed outside Nix (uv, pipx, npm --global) drop their entry
+  # points in ~/.local/bin, which is on no default NixOS path.
+  home.sessionPath = [ "$HOME/.local/bin" ];
+
   #### Shell (keeps bash, adds modern helpers) ################################
   programs.bash = {
     enable = true;

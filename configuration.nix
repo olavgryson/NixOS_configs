@@ -195,6 +195,7 @@ in
   virtualisation.libvirtd.enable = true;
   programs.virt-manager.enable = true;
   services.ollama.enable = true;   # no models auto-pulled; pull manually when needed
+  programs.nix-ld.enable = true;   # run non-Nix dynamically-linked binaries (npm-installed CLIs etc.)
 
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
