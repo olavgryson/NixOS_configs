@@ -140,4 +140,11 @@ in
     [dmenu]
     dmenu_command = rofi
   '';
+
+  # networkmanager_dmenu only builds WPA-PSK profiles; it cannot join
+  # WPA-Enterprise (802.1X: identity + password, e.g. eduroam). nm-applet
+  # handles those: click the network in its tray menu and it opens the EAP
+  # dialog. It also acts as NetworkManager's secret agent, so saved profiles
+  # that need a password re-prompt instead of failing silently.
+  services.network-manager-applet.enable = true;
 }

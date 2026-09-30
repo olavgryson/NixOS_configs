@@ -68,6 +68,23 @@ in
 
   #### Networking #############################################################
   networking.networkmanager.enable = true;
+  # Captive portals (guest Wi-Fi with a browser login page). NixOS ships no
+  # connectivity URI, so NetworkManager never notices a portal; enable the
+  # check, and when it reports PORTAL open a plain-HTTP page in the user's
+  # browser so the network can redirect it to its login page. Hyprland has
+  # no desktop shell that would do this.
+  networking.networkmanager.settings.connectivity = {
+    uri = "http://nmcheck.gnome.org/check_network_status.txt";
+    interval = 60;
+  };
+  networking.networkmanager.dispatcherScripts = [{
+    type = "basic";
+    source = pkgs.writeShellScript "captive-portal" ''
+      [ "$2" = connectivity-change ] && [ "$CONNECTIVITY_STATE" = PORTAL ] || exit 0
+      ${pkgs.systemd}/bin/systemd-run --user --machine=ogryson@ --collect \
+        ${pkgs.xdg-utils}/bin/xdg-open http://nmcheck.gnome.org/
+    '';
+  }];
   services.tailscale.enable = true;
   programs.localsend = {
     enable = true;

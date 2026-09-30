@@ -100,12 +100,11 @@ in
       # units that start via hyprland-session.target -> graphical-session.target.
       # exec-once'ing them as well gives a second instance fighting over the same
       # wayland socket.
-      # nm-applet and blueman-applet are absent for a different reason: each adds
-      # its own systray icon on top of waybar's `network` and `bluetooth`
-      # modules, so you end up with duplicate wifi and bluetooth icons. The
-      # waybar modules stay (they follow the theme); clicking them still opens
-      # the GUIs: network -> networkmanager_dmenu (Wi-Fi picker), bluetooth ->
-      # blueman-manager.
+      # blueman-applet is absent for a different reason: it adds its own
+      # systray icon on top of waybar's `bluetooth` module; clicking that module
+      # opens blueman-manager instead. nm-applet does run (as a systemd user
+      # service, ./launcher.nix) because only it can join WPA-Enterprise
+      # networks.
       # waybar is deliberately absent here: it runs as its own systemd user
       # service (programs.waybar.systemd in ../desktop/bar.nix) so that a
       # monitor-hotplug crash or battery-module hang auto-restarts it instead
