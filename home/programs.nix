@@ -28,6 +28,7 @@
       cat = "bat -pp";
       clauded = "claude --dangerously-skip-permissions";
       agyd = "agy --dangerously-skip-permissions";
+      freebuff = "~/.config/manicode/freebuff";
       rebuild = "sudo nixos-rebuild switch --flake ~/nixos-config#dragonflyg4";
       # Uses the school Copilot token (COPILOT_GITHUB_TOKEN) for this shell;
       # token itself lives in ~/.config/environment.d/10-copilot.conf, not here.

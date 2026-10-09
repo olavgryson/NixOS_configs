@@ -12,14 +12,39 @@
     # format without notice and a pinned fetchurl then stops unpacking.
     claude-code                        # Anthropic Claude, terminal coding agent
     codex                              # OpenAI Codex, terminal coding agent
+    # devin: Cognition Devin, terminal coding agent. Upstream releases prebuilt
+    # static binaries with man pages. To bump: check static.devin.ai/cli/current/manifest.json.
+    (stdenv.mkDerivation rec {
+      pname = "devin";
+      version = "3000.11.3";
+      src = fetchurl {
+        url = "https://static.devin.ai/cli/${version}/devin-${version}-x86_64-unknown-linux.tar.gz";
+        sha256 = "0zhm2pidy6w340g0jkvmlw36h23bgvbhinq0w7ls7whvq09v3cw3";
+      };
+      sourceRoot = ".";
+      dontBuild = true;
+      dontStrip = true;
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out
+        cp -r bin share $out/
+        chmod +x $out/bin/devin
+        runHook postInstall
+      '';
+      meta = {
+        description = "Cognition Devin, terminal coding agent";
+        homepage = "https://devin.ai/cli";
+        mainProgram = "devin";
+      };
+    })
     # opencode: upstream releases move fast, so pin the binary tarball
-    # directly. To bump: update version + sha256 from github releases.
+    # directly. To bump: update version + sha256 (served from opencode.ai/files/bin).
     (stdenv.mkDerivation rec {
       pname = "opencode";
-      version = "1.18.21";
+      version = "2.0.18";
       src = fetchurl {
-        url = "https://github.com/anomalyco/opencode/releases/download/v${version}/opencode-linux-x64.tar.gz";
-        sha256 = "12mkjnljc15bk4qhwivb79ymphhwshald418lf8mgfqkfvnw646r";
+        url = "https://opencode.ai/files/bin/${version}/opencode-linux-x64.tar.gz";
+        sha256 = "0plk6w793jdgc6w14qw471q0mkyfay06pip4wgnkl212gxxpw9b2";
       };
       nativeBuildInputs = [ autoPatchelfHook makeBinaryWrapper ];
       buildInputs = [ stdenv.cc.cc.lib ];
@@ -35,6 +60,30 @@
         description = "AI coding agent built for the terminal";
         homepage = "https://github.com/anomalyco/opencode";
         mainProgram = "opencode";
+      };
+    })
+    # cline: autonomous coding agent CLI (https://cline.bot/cli).
+    # Upstream bundles precompiled standalone binaries via npm.
+    (stdenv.mkDerivation rec {
+      pname = "cline";
+      version = "3.0.65";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/@cline/cli-linux-x64/-/cli-linux-x64-${version}.tgz";
+        sha256 = "04qdj02c0vw0lfr3wmf4gvvqszh20gm4r8qdk35rzrvav76xqk5a";
+      };
+      nativeBuildInputs = [ autoPatchelfHook makeBinaryWrapper ];
+      buildInputs = [ stdenv.cc.cc.lib ];
+      sourceRoot = ".";
+      dontStrip = true;
+      installPhase = ''
+        install -Dm755 package/bin/cline $out/bin/cline
+        wrapProgram $out/bin/cline \
+          --prefix PATH : ${lib.makeBinPath [ ripgrep git ]}
+      '';
+      meta = {
+        description = "Autonomous coding agent CLI for the terminal";
+        homepage = "https://cline.bot/cli";
+        mainProgram = "cline";
       };
     })
     github-copilot-cli                 # GitHub Copilot, terminal
@@ -59,18 +108,63 @@
     (pipx.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
+    ansible
     gnumake gcc cmake                  # build toolchain
     sox                                # audio synth/play — timer alarm beep
 
     ## --- editors / IDEs ---
     vscode
+    code-cursor                        # Cursor AI code editor
     neovim
-    # jetbrains.idea-oss                 # DISABLED: source compile on current snapshot
     tmux
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
     ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq glib
+    # Helper to jump to a tab by 0-based index in the active Herdr workspace.
+    # Required for AZERTY keyboards where top row keys produce & é " ' ( § è ! ç à
+    # instead of digits 1..9, so Herdr's built-in 1..9 range keybinding does not match.
+    (pkgs.writeShellScriptBin "herdr-focus-tab" ''
+      exec ${pkgs.python3}/bin/python3 - "$@" <<'PYEOF'
+import sys, os, subprocess, json
+
+def main():
+    if len(sys.argv) < 2:
+        return
+    try:
+        idx = int(sys.argv[1])
+    except ValueError:
+        return
+
+    bin_path = os.environ.get("HERDR_BIN_PATH", "herdr")
+    ws = os.environ.get("HERDR_ACTIVE_WORKSPACE_ID")
+
+    if not ws:
+        try:
+            snap = subprocess.check_output([bin_path, "api", "snapshot"], stderr=subprocess.DEVNULL)
+            ws = json.loads(snap).get("result", {}).get("snapshot", {}).get("focused_workspace_id")
+        except Exception:
+            pass
+
+    cmd = [bin_path, "tab", "list"]
+    if ws:
+        cmd.extend(["--workspace", ws])
+
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+        data = json.loads(out)
+        tabs = data.get("result", {}).get("tabs", [])
+        if 0 <= idx < len(tabs):
+            tab_id = tabs[idx].get("tab_id")
+            if tab_id:
+                subprocess.run([bin_path, "tab", "focus", tab_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+if __name__ == "__main__":
+    main()
+PYEOF
+    '')
     glow                               # render .md in the terminal
     htop btop fastfetch fetch ncdu
     gocryptfs sshfs                    # encrypted FUSE fs + remote ssh mounts
@@ -78,6 +172,7 @@
     nmap                               # network scanner (CLI)
     imagemagick pandoc                 # image convert + document convert
     pdftk qpdf poppler-utils           # PDF tools (merge, shuffle, split)
+    timg zathura                       # terminal PDF/image viewer and lightweight document viewer
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
@@ -93,6 +188,7 @@
     obs-studio
     libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
     angryipscanner                     # network scanner GUI
+    cisco-packet-tracer_9              # Cisco network simulation tool
     # Dictation stack (~/.local/dict, bound to $mod+F5 and $mod+F7).
     # whisper-cpp-vulkan, not plain whisper-cpp: the Iris Xe GPU runs
     # large-v3-turbo ~2.7x realtime where the CPU backend needs 8x realtime,

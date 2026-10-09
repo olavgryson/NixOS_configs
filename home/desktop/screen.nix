@@ -5,7 +5,7 @@
 
 let
   monitors = import ./monitors.nix { inherit pkgs; };
-  inherit (monitors) wallpaper wallpaperUltrawide externalMonitorDesc;
+  inherit (monitors) wallpaper wallpaperUltrawide externalMonitorDesc externalMonitor;
   theme = import ../../theme.nix { };
   inherit (theme) raw;
 
@@ -33,6 +33,29 @@ let
     sleep 0.5
   '';
 
+  # Wake-up: turn the panels back on and force the external screen through a
+  # fresh modeset.
+  #
+  # DPMS on is the part hypridle recommends: without it the compositor can come
+  # back with the screens still blanked.
+  #
+  # The monitor toggle is for the USB-C hub. On resume i915 tries to restore the
+  # DisplayPort MST payload it had before the sleep, and the hub does not always
+  # answer:
+  #     i915 0000:00:02.0: [drm] *ERROR* Failed to get ACT after 3000 ms
+  # after which the external screen stays black no matter how often it is
+  # replugged. Disabling and re-adding the output makes the compositor tear the
+  # CRTC down and re-train the link from scratch instead of inheriting that
+  # half-dead state. Harmless when no external screen is attached: the rule
+  # simply matches nothing.
+  afterSleep = pkgs.writeShellScript "after-sleep" ''
+    hyprctl=${pkgs.hyprland}/bin/hyprctl
+    "$hyprctl" dispatch dpms on
+    "$hyprctl" keyword monitor "${externalMonitorDesc},disable"
+    ${pkgs.coreutils}/bin/sleep 2
+    "$hyprctl" keyword monitor "${externalMonitor}"
+  '';
+
   # Reads the AC line (1 = charger plugged). Exits 0 when on AC power.
   onAc = pkgs.writeShellScript "on-ac" ''
     [ "$(${pkgs.coreutils}/bin/cat /sys/class/power_supply/AC/online)" = "1" ]
@@ -48,9 +71,7 @@ in
         # to be on screen before the machine is allowed to go down, so the last
         # active window is not briefly readable on wake.
         before_sleep_cmd = "${lockBeforeSleep}";
-        # Recommended by hypridle: without this the panel can stay black on wake
-        # because the compositor left DPMS off.
-        after_sleep_cmd = "hyprctl dispatch dpms on";
+        after_sleep_cmd = "${afterSleep}";
       };
       listener = [
         # Skip lock and suspend while on AC power, so a long-running command

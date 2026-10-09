@@ -49,10 +49,6 @@ in
   nix.settings.auto-optimise-store = true;
   nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 7d"; };
   nixpkgs.config.allowUnfree = true;   # spotify, vscode, discord, steam, obsidian...
-  # IntelliJ IDEA (idea-oss) is flagged insecure over a CVE in the bundled
-  # JetBrains runtime. Allowed by name, so it survives version bumps.
-  nixpkgs.config.allowInsecurePredicate = pkg:
-    builtins.elem (lib.getName pkg) [ "idea-oss" ];
 
   #### Identity / locale ######################################################
   networking.hostName = "dragonflyg4";
@@ -85,7 +81,12 @@ in
         ${pkgs.xdg-utils}/bin/xdg-open http://nmcheck.gnome.org/
     '';
   }];
-  services.tailscale.enable = true;
+  services.netbird.enable = true;
+  # Without resolved, NetBird takes over /etc/resolv.conf and forwards to the
+  # upstream it saw at startup; after switching networks (e.g. to a hotspot)
+  # that upstream is unreachable and all DNS fails. With resolved, NetBird only
+  # registers its own domain on wt0 and NetworkManager's DNS follows the network.
+  services.resolved.enable = true;
   programs.localsend = {
     enable = true;
     openFirewall = true;
@@ -210,6 +211,7 @@ in
   #### Virtualisation / containers / local LLM ################################
   virtualisation.docker.enable = true;
   virtualisation.libvirtd.enable = true;
+  virtualisation.vmware.host.enable = true;
   programs.virt-manager.enable = true;
   services.ollama.enable = true;   # no models auto-pulled; pull manually when needed
   programs.nix-ld.enable = true;   # run non-Nix dynamically-linked binaries (npm-installed CLIs etc.)
@@ -304,6 +306,8 @@ in
   # it then sat frozen and powered until morning. Do not put it back until
   # `systemctl hibernate` is verified to actually power the machine off.
   services.logind.settings.Login.HandleLidSwitch = "suspend";
+  # Lid closed on AC power: do not sleep, keep working even without an external monitor.
+  services.logind.settings.Login.HandleLidSwitchExternalPower = "ignore";
   # Lid closed WITH an external screen attached: do not sleep, keep working.
   # logind calls that "docked" and counts "more than one display connected" as
   # docked too, so this covers the ultrawide with or without a docking station.
@@ -420,7 +424,7 @@ in
       "wheel"          # sudo
       "networkmanager"
       "audio" "video" "render"
-      "docker" "libvirt" "kvm"
+      "docker" "libvirtd" "kvm"
       "lp" "scanner"   # printing / scanning
       "dialout" "plugdev" "i2c"
       "ollama"
@@ -451,6 +455,7 @@ in
     pciutils usbutils
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
+    netbird-ui
     f3d                        # fast 3D model viewer (glTF/glb, obj, stl)
     # Short name for the passwordless rebuild command above.
     (writeShellScriptBin "rebuild" ''
