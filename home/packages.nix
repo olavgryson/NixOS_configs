@@ -87,6 +87,9 @@
       };
     })
     github-copilot-cli                 # GitHub Copilot, terminal
+    # mistral-vibe: Mistral AI terminal coding agent (vibe CLI, vibe-acp).
+    # Disables checkPhase because upstream interactive UI/sandbox tests fail in Nix build environment.
+    (mistral-vibe.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
     # for individuals — "Sign in with Google" fails and points at Antigravity.
