@@ -187,6 +187,7 @@ PYEOF
     discord
     gnome-calculator                    # GUI calculator
     spotify
+    spotifast                           # lightweight native Spotify client in Rust
     vlc                                # mpv is not here: see programs.mpv below
     obs-studio
     libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
