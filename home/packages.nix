@@ -187,7 +187,44 @@ PYEOF
     discord
     gnome-calculator                    # GUI calculator
     spotify
-    spotifast                           # lightweight native Spotify client in Rust
+    # spotifast: lightweight native Spotify client in Rust. Upstream prebuilt
+    # binary pinned to 0.13.3 (nixpkgs currently lags at 0.13.0).
+    (stdenv.mkDerivation rec {
+      pname = "spotifast";
+      version = "0.13.3";
+      src = fetchurl {
+        url = "https://github.com/crmne/spotifast/releases/download/v${version}/spotifast-v${version}-x86_64-unknown-linux-gnu.tar.gz";
+        sha256 = "sha256-NBIwbkGyyuL3VUv5c+RCz13O8faeTCQEXyMXzoDSSXA=";
+      };
+      nativeBuildInputs = [ autoPatchelfHook makeWrapper ];
+      buildInputs = [
+        stdenv.cc.cc.lib
+        alsa-lib
+        libpulseaudio
+      ];
+      installPhase = ''
+        install -Dm755 spotifast $out/bin/spotifast
+        install -Dm644 packaging/applications/spotifast.desktop $out/share/applications/spotifast.desktop
+        install -Dm644 packaging/icons/spotifast.svg $out/share/icons/hicolor/scalable/apps/spotifast.svg
+
+        wrapProgram $out/bin/spotifast \
+          --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [
+            dbus
+            libxkbcommon
+            wayland
+            libGL
+            libx11
+            libxcursor
+            libxi
+            libxrandr
+          ]}"
+      '';
+      meta = {
+        description = "Fast native Spotify client with local playback and Spotify Connect";
+        homepage = "https://spotifast.rocks";
+        mainProgram = "spotifast";
+      };
+    })
     vlc                                # mpv is not here: see programs.mpv below
     obs-studio
     libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
