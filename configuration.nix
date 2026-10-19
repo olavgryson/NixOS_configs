@@ -221,11 +221,30 @@ in
   programs.steam.enable = true;   # pulls 32-bit stack
   programs.steam.remotePlay.openFirewall = true;
 
-  #### Swap + hibernate #######################################################
-  # zram = fast compressed RAM swap for daily use.
+  #### Swap, memory & hibernate ################################################
+  # zram compressed RAM swap for daily use. Sized at 100% of RAM (16 GB virtual
+  # swap device). zstd achieves ~2.7:1 compression, consuming ~6 GB physical RAM
+  # when fully saturated.
+  zramSwap = {
+    enable = true;
+    memoryPercent = 100;
+  };
+
+  # Tune memory subsystem for zram:
+  # - swappiness = 150: aggressively swap anonymous pages into zram to preserve
+  #   page cache for disk I/O and builds.
+  # - page-cluster = 0: disables swap readahead clustering (reads 1 page at a time),
+  #   eliminating read-amplification latency on non-rotational swap.
+  boot.kernel.sysctl = {
+    "vm.swappiness" = 150;
+    "vm.page-cluster" = 0;
+  };
+
+  # Kernel Samepage Merging (KSM): deduplicates identical memory pages (e.g. across VMs).
+  hardware.ksm.enable = true;
+
   # The on-disk SWAP partition (>= RAM, see README) is the hibernate image
   # target.
-  zramSwap.enable = true;
   boot.resumeDevice = "/dev/disk/by-label/SWAP";
   # swapDevices for the SWAP partition is normally written by
   # nixos-generate-config (run `swapon /dev/disk/by-label/SWAP` before
