@@ -38,7 +38,8 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 10;   # keep ESP from overflowing
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelPackages = pkgs.linuxPackages_latest;     # good Raptor Lake support
+  boot.kernelPackages =
+    inputs.nixpkgs-kernel.legacyPackages.${pkgs.stdenv.hostPlatform.system}.linuxPackages_7_2; # Linux 7.2.11
   # fwupd (LVFS): `fwupdmgr refresh && fwupdmgr update` for BIOS/SSD/Thunderbolt
   # firmware. HP ships this machine's BIOS as a signed UEFI capsule, so updates
   # install straight from Linux — no Windows or bootable USB needed.

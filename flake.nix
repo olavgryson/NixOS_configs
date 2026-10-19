@@ -23,6 +23,11 @@
       url = "github:jacopone/antigravity-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Pinned nixpkgs input supplying Linux 7.2.11
+    nixpkgs-kernel = {
+      url = "github:NixOS/nixpkgs/0d927ee3b4dfd77e453f28d6289e58d55136975b";
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
