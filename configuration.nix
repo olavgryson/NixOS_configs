@@ -382,6 +382,8 @@ in
   # piece that watches udisks2 and triggers the automount on plug-in itself.
   services.udisks2.enable = true;
   services.gvfs.enable = true;
+  # usbmuxd multiplexes USB connections to iOS devices for AFC (gvfs-afc) and ifuse.
+  services.usbmuxd.enable = true;
 
   #### btrfs snapshots (snapper) ###############################################
   # Hourly timeline snapshots of / and /home, pruned by age. Rollback of / is
@@ -473,6 +475,7 @@ in
   environment.systemPackages = with pkgs; [
     git vim wget curl
     pciutils usbutils
+    libimobiledevice ifuse     # iOS USB communication and filesystem mounting
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
     netbird-ui
