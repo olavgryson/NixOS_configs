@@ -32,6 +32,44 @@ in
   # Package overrides, e.g. the Upscayl onboarding patch in overlays/upscayl.nix
   nixpkgs.overlays = [
     (import ./overlays/upscayl.nix)
+    # Tolerate external kernel modules (such as VMware) that lack .ko.cer
+    # signing certificates. Without this, aggregateModules aborts on missing
+    # certificate files when concatenating entries from modules.dep.
+    (final: prev: {
+      aggregateModules = modules:
+        (prev.aggregateModules modules).overrideAttrs (old: {
+          postBuild = builtins.replaceStrings
+            [ "xargs -d'\\n' cat >> modules.cer" ]
+            [ "while IFS= read -r cer; do [ -f \"$cer\" ] && cat \"$cer\" >> modules.cer; done || true" ]
+            old.postBuild;
+        });
+      # Disable test_is_valid which fails in the build sandbox due to keyutils
+      # keyring buffer alignment issues.
+      udiskie = prev.udiskie.overridePythonAttrs (old: {
+        disabledTests = (old.disabledTests or [ ]) ++ [ "test_is_valid" ];
+      });
+      # patchelf corrupts vmnet-natd's program headers when rewriting RPATH.
+      # Preserve the unpatched binary across autoPatchelf, set only its interpreter,
+      # and wrap it with LD_LIBRARY_PATH so it can load libssl/libcrypto.
+      vmware-workstation = prev.vmware-workstation.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cp $NIX_BUILD_TOP/unpacked/vmware-vmx/bin/vmnet-natd $NIX_BUILD_TOP/vmnet-natd.pristine
+        '';
+        preFixup = (old.preFixup or "") + ''
+          fixVmnetNatd() {
+            local interp
+            interp=$(patchelf --print-interpreter $out/bin/vmware-networks)
+            cp $NIX_BUILD_TOP/vmnet-natd.pristine $out/bin/.vmnet-natd-wrapped
+            chmod +x $out/bin/.vmnet-natd-wrapped
+            patchelf --set-interpreter "$interp" $out/bin/.vmnet-natd-wrapped
+            rm -f $out/bin/vmnet-natd
+            makeWrapper $out/bin/.vmnet-natd-wrapped $out/bin/vmnet-natd \
+              --prefix LD_LIBRARY_PATH : "$out/lib/vmware-ovftool"
+          }
+          postFixupHooks+=(fixVmnetNatd)
+        '';
+      });
+    })
   ];
 
   #### Boot / firmware ########################################################
