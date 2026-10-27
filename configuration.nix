@@ -36,6 +36,9 @@ in
     # signing certificates. Without this, aggregateModules aborts on missing
     # certificate files when concatenating entries from modules.dep.
     (final: prev: {
+      # Pull Codex CLI from nixpkgs-unstable to follow rapid upstream bumps.
+      codex = inputs.nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.codex;
+
       aggregateModules = modules:
         (prev.aggregateModules modules).overrideAttrs (old: {
           postBuild = builtins.replaceStrings
