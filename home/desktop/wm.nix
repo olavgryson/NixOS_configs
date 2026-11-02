@@ -95,6 +95,12 @@ in
         blur = { enabled = true; size = 6; passes = 2; };
       };
 
+      # Ignore maximize requests sent by apps (e.g. Kitty, Steam, browsers)
+      # so they tile normally instead of spawning in fullscreen/maximized mode.
+      windowrule = [
+        "suppress_event maximize, match:class .*"
+      ];
+
       # hyprpaper and hypridle are DELIBERATELY absent here: services.hyprpaper
       # and services.hypridle (bottom of this file) already create systemd user
       # units that start via hyprland-session.target -> graphical-session.target.

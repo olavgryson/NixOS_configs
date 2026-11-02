@@ -111,6 +111,7 @@
     (pipx.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
+    minikube kubeconform               # local Kubernetes cluster (bundles kubectl), manifest validator
     ansible
     gnumake gcc cmake                  # build toolchain
     sox                                # audio synth/play — timer alarm beep
@@ -120,6 +121,7 @@
     code-cursor                        # Cursor AI code editor
     neovim
     tmux
+    t3code                             # Minimal web/desktop GUI for coding agents
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
     ## --- terminal / CLI tools ---
@@ -188,19 +190,20 @@ PYEOF
     gnome-calculator                    # GUI calculator
     spotify
     # spotifast: lightweight native Spotify client in Rust. Upstream prebuilt
-    # binary pinned to 0.13.3 (nixpkgs currently lags at 0.13.0).
+    # binary pinned to 0.16.0 (nixpkgs currently lags at 0.13.0).
     (stdenv.mkDerivation rec {
       pname = "spotifast";
-      version = "0.13.3";
+      version = "0.16.0";
       src = fetchurl {
         url = "https://github.com/crmne/spotifast/releases/download/v${version}/spotifast-v${version}-x86_64-unknown-linux-gnu.tar.gz";
-        sha256 = "sha256-NBIwbkGyyuL3VUv5c+RCz13O8faeTCQEXyMXzoDSSXA=";
+        sha256 = "sha256-JSvrD6Q9Y1vSb67F7G2wW4oHCQIyNWztJvVL9ONqaGo=";
       };
       nativeBuildInputs = [ autoPatchelfHook makeWrapper ];
       buildInputs = [
         stdenv.cc.cc.lib
         alsa-lib
         libpulseaudio
+        pipewire
       ];
       installPhase = ''
         install -Dm755 spotifast $out/bin/spotifast

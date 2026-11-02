@@ -24,10 +24,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Pinned nixpkgs input supplying Linux 7.2.11
-    nixpkgs-kernel = {
-      url = "github:NixOS/nixpkgs/0d927ee3b4dfd77e453f28d6289e58d55136975b";
-    };
 
     # Bleeding-edge nixpkgs-unstable input for developer tools that update faster
     # than the NixOS channel (e.g. OpenAI Codex CLI).

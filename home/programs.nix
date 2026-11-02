@@ -62,10 +62,10 @@
       window_padding_width = 6;
       scrollback_lines = 10000;
       enable_audio_bell = false;
+      remember_window_size = false;
       confirm_os_window_close = 0;        # no "are you sure" on close
       tab_title_template = "{index}";     # removes user@hostname from tab bar
       copy_on_select = "clipboard";
-      open_url_modifiers = "none";        # plain click on a URL opens it
       tab_bar_edge = "top";
       tab_bar_style = "powerline";
       # "splits" must be enabled, otherwise the vsplit/hsplit binds do nothing.
