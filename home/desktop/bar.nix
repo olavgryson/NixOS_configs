@@ -716,8 +716,31 @@ in
   # ACPI read on the dock's power event. Either way the process dies or hangs
   # and `exec-once` never relaunches it. Running it as a user service with
   # Restart=on-failure brings the bar back automatically.
+  #
+  # Hyprland's Lua IPC only accepts Lua expressions after `dispatch`, but the
+  # hyprland/workspaces module hard-codes the legacy `dispatch workspace N`
+  # syntax for button clicks, so clicking a workspace silently does nothing.
+  # Patch the click handler to send the Lua equivalents.
   programs.waybar = {
     enable = true;
+    package = pkgs.waybar.overrideAttrs (old: {
+      postPatch = (old.postPatch or "") + ''
+        f=src/modules/hyprland/workspace.cpp
+        substituteInPlace $f \
+          --replace-fail '"dispatch focusworkspaceoncurrentmonitor " + std::to_string(id())' \
+                         '"dispatch hl.dsp.focus({ workspace = " + std::to_string(id()) + ", on_current_monitor = true })"' \
+          --replace-fail '"dispatch workspace " + std::to_string(id())' \
+                         '"dispatch hl.dsp.focus({ workspace = " + std::to_string(id()) + " })"' \
+          --replace-fail '"dispatch focusworkspaceoncurrentmonitor name:" + name()' \
+                         '"dispatch hl.dsp.focus({ workspace = \"name:" + name() + "\", on_current_monitor = true })"' \
+          --replace-fail '"dispatch workspace name:" + name()' \
+                         '"dispatch hl.dsp.focus({ workspace = \"name:" + name() + "\" })"' \
+          --replace-fail '"dispatch togglespecialworkspace " + name()' \
+                         '"dispatch hl.dsp.workspace.toggle_special(\"" + name() + "\")"' \
+          --replace-fail '"dispatch togglespecialworkspace"' \
+                         '"dispatch hl.dsp.workspace.toggle_special()"'
+      '';
+    });
     systemd.enable = true;
     settings.mainBar = {
       layer = "top";
