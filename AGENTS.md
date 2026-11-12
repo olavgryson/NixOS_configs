@@ -18,6 +18,11 @@ for the layout, install procedure and hardware notes; don't duplicate it here.
    it back to the user to apply.
 5. Never edit `hardware-configuration.nix` by hand except for mount points or
    kernel parameters.
+6. **Never update PacketTracer (`cisco-packet-tracer`) unless explicitly requested.**
+   Cisco Packet Tracer requires a proprietary Ubuntu `.deb` downloaded manually from
+   Cisco NetAcad. It cannot be downloaded automatically by Nix. Never bump, update,
+   or touch PacketTracer during routine system or flake package updates unless the
+   user explicitly instructs to update PacketTracer.
 
 ## Workflow
 

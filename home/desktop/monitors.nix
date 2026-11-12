@@ -27,10 +27,27 @@ in
 {
   inherit wallpaper wallpaperUltrawide externalMonitorDesc;
 
-  # One place for the screen definitions, so the monitor lines below and any
-  # script that re-enables a panel use the exact same string and the laptop
-  # always comes back in the same spot. See the diagram at `monitor =` for
-  # where 760x1440 comes from.
-  laptopMonitor = "eDP-1,1920x1280@60,760x1440,1";
-  externalMonitor = "${externalMonitorDesc},3440x1440@120,0x0,1";
+  # One place for the screen definitions, so the Hyprland config and every
+  # script that re-enables a panel use the exact same values and the laptop
+  # always comes back in the same spot. Each is an `hl.monitor` argument table
+  # (see the diagram at `monitor =` in ./wm.nix for where 760x1440 comes from).
+  laptopMonitor = {
+    output = "eDP-1";
+    mode = "1920x1280@60";
+    position = "760x1440";
+    scale = "1";
+  };
+  externalMonitor = {
+    output = externalMonitorDesc;
+    mode = "3440x1440@120";
+    position = "0x0";
+    scale = "1";
+  };
+
+  # Lua snippets for `hyprctl eval`. The Lua config manager has no
+  # `hyprctl keyword`; a monitor rule is changed at runtime by calling
+  # `hl.monitor` again. `disabled` is spelled out in both directions because a
+  # repeated call merges into the existing rule, so re-enabling has to say so.
+  enableMonitorLua = m: "hl.monitor(${pkgs.lib.generators.toLua { } (m // { disabled = false; })})";
+  disableMonitorLua = output: "hl.monitor(${pkgs.lib.generators.toLua { } { inherit output; disabled = true; }})";
 }

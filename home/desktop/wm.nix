@@ -13,21 +13,28 @@ let
   diskNotifyHook = pkgs.writeShellScript "disk-notify-hook" ''
     ${pkgs.procps}/bin/pkill -RTMIN+9 waybar 2>/dev/null || true
   '';
+
+  startupCommands = [
+    "mako"
+    "wl-paste --watch cliphist store"
+    "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
+    # Watches udisks2 (enabled in ../configuration.nix) and auto-mounts USB
+    # drives/SD cards on plug-in. No --tray: its icon didn't match the rest
+    # of the bar (see custom/disks above, which replaces it and uses
+    # --event-hook here to refresh on every mount/unmount).
+    "${pkgs.udiskie}/bin/udiskie --no-tray --event-hook ${diskNotifyHook}"
+  ];
 in
 {
   wayland.windowManager.hyprland = {
     enable = true;
     package = null;        # use the system Hyprland from programs.hyprland
     portalPackage = null;
+    # Hyprland 0.57 only reads Lua (hyprland.lua); a hyprlang hyprland.conf is
+    # ignored and the compositor falls back to its stock config. Each key of
+    # `settings` becomes an `hl.<key>(...)` call, list values one call per entry.
+    configType = "lua";
     settings = {
-      "$mod" = "SUPER";
-      "$term" = "kitty";
-      "$menu" = "rofi -show drun";
-      # The zen flake installs the binary as `zen-beta`, not `zen`; with "zen"
-      # the $mod+B bind silently does nothing.
-      "$browser" = "zen-beta";
-      "$files" = "nautilus";
-
       # ── Screens ─────────────────────────────────────────────────────────
       # The ultrawide sits ABOVE the laptop panel, not beside it. Hyprland has no
       # "above/below" keywords, only coordinates, so the layout is:
@@ -53,7 +60,8 @@ in
       monitor = [
         externalMonitor
         laptopMonitor
-        ",preferred,auto,1"          # fallback for unknown screens
+        # fallback for unknown screens
+        { output = ""; mode = "preferred"; position = "auto"; scale = "1"; }
       ];
 
       # Without XCURSOR_THEME in the session environment every client looks up
@@ -63,6 +71,7 @@ in
       # removes the guesswork; Hyprland exports these to everything it starts,
       # so compositor and clients agree.
 
+      config = {
       input = {
         kb_layout = "be";              # Belgian AZERTY
         # digits are on level-2 (Shift) of the number row, and Caps Lock's
@@ -70,7 +79,7 @@ in
         # Caps Lock yields the digits (tradeoff: À È É Ç uppercase gone).
         kb_options = "caps:digits_row";
         follow_mouse = 1;
-        touchpad = { natural_scroll = true; tap-to-click = true; };
+        touchpad = { natural_scroll = true; tap_to_click = true; };
       };
 
       general = {
@@ -81,8 +90,10 @@ in
         # The active border runs from sky to grain — the same transition the
         # painting makes top to bottom. Inactive windows get the tree shadow so
         # they recede.
-        "col.active_border" = "rgba(${raw.sky}ee) rgba(${raw.ochre}ee) 45deg";
-        "col.inactive_border" = "rgba(${raw.overlay}aa)";
+        col = {
+          active_border = { colors = [ "rgba(${raw.sky}ee)" "rgba(${raw.ochre}ee)" ]; angle = 45; };
+          inactive_border = "rgba(${raw.overlay}aa)";
+        };
       };
       # dwindle splits side by side while width > height * multiplier, so on an
       # ultrawide every new window would keep stacking left-to-right. 1.5 sits
@@ -94,11 +105,16 @@ in
         rounding = 8;
         blur = { enabled = true; size = 6; passes = 2; };
       };
+      };
 
       # Ignore maximize requests sent by apps (e.g. Kitty, Steam, browsers)
       # so they tile normally instead of spawning in fullscreen/maximized mode.
-      windowrule = [
-        "suppress_event maximize, match:class .*"
+      window_rule = [
+        {
+          name = "suppress-maximize-events";
+          match.class = ".*";
+          suppress_event = "maximize";
+        }
       ];
 
       # hyprpaper and hypridle are DELIBERATELY absent here: services.hyprpaper
@@ -115,15 +131,17 @@ in
       # service (programs.waybar.systemd in ../desktop/bar.nix) so that a
       # monitor-hotplug crash or battery-module hang auto-restarts it instead
       # of being gone until the next login.
-      exec-once = [
-        "mako"
-        "wl-paste --watch cliphist store"
-        "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
-        # Watches udisks2 (enabled in ../configuration.nix) and auto-mounts USB
-        # drives/SD cards on plug-in. No --tray: its icon didn't match the rest
-        # of the bar (see custom/disks above, which replaces it and uses
-        # --event-hook here to refresh on every mount/unmount).
-        "${pkgs.udiskie}/bin/udiskie --no-tray --event-hook ${diskNotifyHook}"
+      on = [
+        {
+          _args = [
+            "hyprland.start"
+            (lib.generators.mkLuaInline (
+              "function()\n"
+              + lib.concatMapStrings (c: "  hl.exec_cmd(${lib.generators.toLua { } c})\n") startupCommands
+              + "end"
+            ))
+          ];
+        }
       ];
     };
   };

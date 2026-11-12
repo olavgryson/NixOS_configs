@@ -251,7 +251,10 @@ in
 
   #### Virtualisation / containers / local LLM ################################
   virtualisation.docker.enable = true;
-  virtualisation.libvirtd.enable = true;
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu.swtpm.enable = true;
+  };
   virtualisation.vmware.host.enable = true;
   programs.virt-manager.enable = true;
   services.ollama.enable = true;   # no models auto-pulled; pull manually when needed
@@ -260,6 +263,7 @@ in
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
   programs.steam.remotePlay.openFirewall = true;
+  services.flatpak.enable = true; # enables Flathub for games/apps with proprietary FHS runtimes (e.g. official Minecraft launcher)
 
   #### Swap, memory & hibernate ################################################
   # zram compressed RAM swap for daily use. Sized at 100% of RAM (16 GB virtual

@@ -113,12 +113,12 @@ let
     done
 
     if [ "$(others)" -gt 0 ]; then
-      ${lib.getExe' hyprland "hyprctl"} keyword monitor "eDP-1,disable"
+      ${lib.getExe' hyprland "hyprctl"} eval 'hl.monitor({ output = "eDP-1", disabled = true })'
     fi
   '';
 
   greeterLidOpen = pkgs.writeShellScript "greeter-lid-open" ''
-    ${lib.getExe' hyprland "hyprctl"} keyword monitor "eDP-1,preferred,auto,1"
+    ${lib.getExe' hyprland "hyprctl"} eval 'hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = "1", disabled = false })'
   '';
 
   # Startup order matters: settle the monitors *before* ReGreet maps its window,
@@ -132,65 +132,70 @@ let
     fi
 
     ${lib.getExe pkgs.regreet}
-    ${lib.getExe' hyprland "hyprctl"} dispatch exit
+    ${lib.getExe' hyprland "hyprctl"} dispatch 'hl.dsp.exit()'
   '';
 
   # Bare Hyprland as the greeter compositor: no animations, no logo, no
   # keybinds. It starts hyprpaper for the background and ReGreet for the login
   # field; once ReGreet exits the compositor stops and greetd restarts.
-  greeterHyprlandConf = pkgs.writeText "greeter-hyprland.conf" ''
-    monitor = ,preferred,auto,1
+  #
+  # Hyprland 0.57 only understands Lua configs (the hyprlang parser is gone), so
+  # this is a Lua file. Handing it a hyprlang file fails with "unexpected symbol
+  # near ','" on the first `monitor = ,preferred,auto,1` line, after which
+  # Hyprland drops into its emergency config.
+  greeterHyprlandConf = pkgs.writeText "greeter-hyprland.lua" ''
+    hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "1" })
 
-    input {
-      kb_layout = be
-      kb_model  = pc105
-      kb_options = caps:digits_row
-      follow_mouse = 1
-      touchpad {
-        natural_scroll = true
-        tap-to-click   = true
-      }
-    }
+    hl.config({
+      input = {
+        kb_layout  = "be",
+        kb_model   = "pc105",
+        kb_options = "caps:digits_row",
+        follow_mouse = 1,
+        touchpad = {
+          natural_scroll = true,
+          tap_to_click = true,
+        },
+      },
+      general = {
+        gaps_in     = 0,
+        gaps_out    = 0,
+        border_size = 0,
+      },
+      animations = { enabled = false },
+      decoration = { blur = { enabled = false } },
+      misc = {
+        disable_hyprland_logo    = true,
+        disable_splash_rendering = true,
+        force_default_wallpaper  = 0,
+      },
+    })
+    -- Note: `misc:vfr` no longer exists (it moved to `debug:vfr` and defaults
+    -- to on). Setting it makes Hyprland show a config-error overlay on the
+    -- login screen, so it is intentionally absent.
 
-    general {
-      gaps_in = 0
-      gaps_out = 0
-      border_size = 0
-    }
+    -- ReGreet fills the screen as a floating window, so the wallpaper behind
+    -- it stays visible through its translucent background.
+    hl.window_rule({
+      name  = "regreet",
+      match = { class = "regreet" },
+      float = true,
+      center = true,
+      size  = "100% 100%",
+    })
 
-    animations { enabled = false }
-    decoration { blur { enabled = false } }
+    -- Closing or opening the lid *while* the login screen is up. Same device
+    -- name and same scripts-with-a-guard idea as the session (./home/
+    -- shortcuts.nix); "Lid Switch" comes verbatim from `hyprctl devices`.
+    -- `locked` keeps the bind firing when the compositor is otherwise inert,
+    -- which is exactly the greeter's state.
+    hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd("${greeterLidClose}"), { locked = true })
+    hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("${greeterLidOpen}"), { locked = true })
 
-    misc {
-      disable_hyprland_logo    = true
-      disable_splash_rendering = true
-      force_default_wallpaper  = 0
-    }
-    # Note: `misc:vfr` no longer exists (it moved to `debug:vfr` and defaults
-    # to on). Keeping it here made Hyprland show a config-error overlay on the
-    # login screen, so it is intentionally gone.
-
-    # ReGreet centered and floating, so the wallpaper stays visible around it.
-    #
-    # Hyprland 0.56 rewrote the rule syntax; both older spellings are rejected:
-    #   windowrulev2 = float, class:(regreet)   -> "windowrulev2 is deprecated"
-    #   windowrule   = float, class:(regreet)   -> "invalid field float: missing
-    #                                              a value"
-    # Rules are now comma-separated `field value` pairs, and matchers need the
-    # `match:` prefix, mirroring the `match = { ... }` table of the new Lua
-    # config. Booleans must be spelled out, hence `float true` over bare `float`.
-    windowrule = float true, center true, size 100% 100%, match:class regreet
-
-    # Closing or opening the lid *while* the login screen is up. Same device
-    # name and same scripts-with-a-guard idea as the session (./home/
-    # shortcuts.nix); "Lid Switch" comes verbatim from `hyprctl devices`.
-    # `bindl` is the variant that keeps firing when the compositor is otherwise
-    # inert, which is exactly the greeter's state.
-    bindl = , switch:on:Lid Switch, exec, ${greeterLidClose}
-    bindl = , switch:off:Lid Switch, exec, ${greeterLidOpen}
-
-    exec-once = ${lib.getExe pkgs.hyprpaper} --config ${greeterHyprpaperConf}
-    exec-once = ${greeterStartup}
+    hl.on("hyprland.start", function()
+      hl.exec_cmd("${lib.getExe pkgs.hyprpaper} --config ${greeterHyprpaperConf}")
+      hl.exec_cmd("${greeterStartup}")
+    end)
   '';
 
   # ReGreet looks for session files in $XDG_DATA_DIRS/{wayland-sessions,
@@ -201,7 +206,7 @@ let
   # Hyprland 0.56 paints a "Hyprland was started without start-hyprland" warning
   # over the screen when it is exec'd directly, which used to be the first
   # message on the login screen. The wrapper is a watchdog: it exits as soon as
-  # Hyprland exits cleanly (which is what `hyprctl dispatch exit` below does),
+  # Hyprland exits cleanly (which is what the `hl.dsp.exit()` dispatch below does),
   # so greetd's session lifecycle is unchanged. Arguments after `--` go to
   # Hyprland itself.
   greeterLauncher = pkgs.writeShellScript "greeter-launcher" ''

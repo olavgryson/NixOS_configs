@@ -12,31 +12,6 @@
     # format without notice and a pinned fetchurl then stops unpacking.
     claude-code                        # Anthropic Claude, terminal coding agent
     codex                              # OpenAI Codex, terminal coding agent
-    # devin: Cognition Devin, terminal coding agent. Upstream releases prebuilt
-    # static binaries with man pages. To bump: check static.devin.ai/cli/current/manifest.json.
-    (stdenv.mkDerivation rec {
-      pname = "devin";
-      version = "3000.11.3";
-      src = fetchurl {
-        url = "https://static.devin.ai/cli/${version}/devin-${version}-x86_64-unknown-linux.tar.gz";
-        sha256 = "0zhm2pidy6w340g0jkvmlw36h23bgvbhinq0w7ls7whvq09v3cw3";
-      };
-      sourceRoot = ".";
-      dontBuild = true;
-      dontStrip = true;
-      installPhase = ''
-        runHook preInstall
-        mkdir -p $out
-        cp -r bin share $out/
-        chmod +x $out/bin/devin
-        runHook postInstall
-      '';
-      meta = {
-        description = "Cognition Devin, terminal coding agent";
-        homepage = "https://devin.ai/cli";
-        mainProgram = "devin";
-      };
-    })
     # opencode: upstream releases move fast, so pin the binary tarball
     # directly. To bump: update version + sha256 (served from opencode.ai/files/bin).
     (stdenv.mkDerivation rec {
@@ -62,34 +37,7 @@
         mainProgram = "opencode";
       };
     })
-    # cline: autonomous coding agent CLI (https://cline.bot/cli).
-    # Upstream bundles precompiled standalone binaries via npm.
-    (stdenv.mkDerivation rec {
-      pname = "cline";
-      version = "3.0.65";
-      src = fetchurl {
-        url = "https://registry.npmjs.org/@cline/cli-linux-x64/-/cli-linux-x64-${version}.tgz";
-        sha256 = "04qdj02c0vw0lfr3wmf4gvvqszh20gm4r8qdk35rzrvav76xqk5a";
-      };
-      nativeBuildInputs = [ autoPatchelfHook makeBinaryWrapper ];
-      buildInputs = [ stdenv.cc.cc.lib ];
-      sourceRoot = ".";
-      dontStrip = true;
-      installPhase = ''
-        install -Dm755 package/bin/cline $out/bin/cline
-        wrapProgram $out/bin/cline \
-          --prefix PATH : ${lib.makeBinPath [ ripgrep git ]}
-      '';
-      meta = {
-        description = "Autonomous coding agent CLI for the terminal";
-        homepage = "https://cline.bot/cli";
-        mainProgram = "cline";
-      };
-    })
     github-copilot-cli                 # GitHub Copilot, terminal
-    # mistral-vibe: Mistral AI terminal coding agent (vibe CLI, vibe-acp).
-    # Disables checkPhase because upstream interactive UI/sandbox tests fail in Nix build environment.
-    (mistral-vibe.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
     # for individuals — "Sign in with Google" fails and points at Antigravity.
@@ -118,7 +66,6 @@
 
     ## --- editors / IDEs ---
     vscode
-    code-cursor                        # Cursor AI code editor
     neovim
     tmux
     t3code                             # Minimal web/desktop GUI for coding agents
@@ -181,6 +128,7 @@ PYEOF
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
+    inputs.claude-desktop.packages.${pkgs.system}.default # Claude Desktop (Anthropic Linux build in FHS container for MCP)
     # Obsidian ignores the system dark-mode preference (its Chromium build never
     # queries gtk-application-prefer-dark-theme), so force Chromium's own switch.
     (pkgs.writeShellScriptBin "obsidian" ''

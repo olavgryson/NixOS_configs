@@ -33,6 +33,8 @@
       # Uses the school Copilot token (COPILOT_GITHUB_TOKEN) for this shell;
       # token itself lives in ~/.config/environment.d/10-copilot.conf, not here.
       copilotschool = "export $(cat ~/.config/environment.d/10-copilot.conf); copilot";
+      # Isolated OpenCode profile for school with slug resolution (~/.local/bin/opencodeSchool)
+      opencodeschool = "opencodeSchool";
     };
   };
   #### Agent multiplexer (herdr) #############################################

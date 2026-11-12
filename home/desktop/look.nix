@@ -61,7 +61,7 @@ in
   # XCURSOR_* set the cursor for the compositor and every client too (see
   # the note on cursorTheme above), so nothing falls back to ~/.icons/default.
   wayland.windowManager.hyprland.settings.env = [
-    "XCURSOR_THEME,${cursorTheme}"
-    "XCURSOR_SIZE,${toString cursorSize}"
+    { _args = [ "XCURSOR_THEME" cursorTheme ]; }
+    { _args = [ "XCURSOR_SIZE" (toString cursorSize) ]; }
   ];
 }

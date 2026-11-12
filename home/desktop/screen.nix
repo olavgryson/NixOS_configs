@@ -5,7 +5,7 @@
 
 let
   monitors = import ./monitors.nix { inherit pkgs; };
-  inherit (monitors) wallpaper wallpaperUltrawide externalMonitorDesc externalMonitor;
+  inherit (monitors) wallpaper wallpaperUltrawide externalMonitorDesc externalMonitor enableMonitorLua disableMonitorLua;
   theme = import ../../theme.nix { };
   inherit (theme) raw;
 
@@ -50,10 +50,10 @@ let
   # simply matches nothing.
   afterSleep = pkgs.writeShellScript "after-sleep" ''
     hyprctl=${pkgs.hyprland}/bin/hyprctl
-    "$hyprctl" dispatch dpms on
-    "$hyprctl" keyword monitor "${externalMonitorDesc},disable"
+    "$hyprctl" dispatch 'hl.dsp.dpms({ action = "enable" })'
+    "$hyprctl" eval '${disableMonitorLua externalMonitorDesc}'
     ${pkgs.coreutils}/bin/sleep 2
-    "$hyprctl" keyword monitor "${externalMonitor}"
+    "$hyprctl" eval '${enableMonitorLua externalMonitor}'
   '';
 
   # Reads the AC line (1 = charger plugged). Exits 0 when on AC power.
