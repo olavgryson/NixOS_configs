@@ -1,7 +1,7 @@
 ################################################################################
 #  Configured programs — git, bash, terminal, shell QoL.
 ################################################################################
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 {
   #### Git ###################################################################
   programs.git = {
@@ -35,12 +35,33 @@
       copilotschool = "export $(cat ~/.config/environment.d/10-copilot.conf); copilot";
       # Isolated OpenCode profile for school with slug resolution (~/.local/bin/opencodeSchool)
       opencodeschool = "opencodeSchool";
+      ta = "tmux attach || tmux new";
     };
   };
   #### Agent multiplexer (herdr) #############################################
   # Terminal multiplexer for running and watching multiple AI coding agents.
   # TUI only — the desktop entry below makes it launchable from rofi.
-  programs.herdr.enable = true;
+  programs.herdr = {
+    enable = true;
+    settings =
+      let
+        azertyChars = [ "&" "é" "\"" "'" "(" "§" "è" "!" "ç" "à" ];
+        tabCommand = isDirect: idx: char: {
+          key = if isDirect then "alt+${char}" else "prefix+${char}";
+          type = "shell";
+          command = "herdr-focus-tab ${toString idx}";
+          description = "jump to tab ${toString (idx + 1)}${if isDirect then " (direct)" else ""}";
+        };
+      in {
+        onboarding = false;
+        ui.agent_panel_sort = "spaces";
+        keys = {
+          prefix = "ctrl+<";
+          command = (lib.imap0 (tabCommand false) azertyChars)
+                 ++ (lib.imap0 (tabCommand true) azertyChars);
+        };
+      };
+  };
 
   # Launcher entry: herdr has no .desktop of its own (terminal-only app).
   xdg.desktopEntries."herdr" = {
@@ -49,6 +70,42 @@
     exec = "kitty herdr";
     terminal = false;
     categories = [ "System" ];
+  };
+
+  #### Terminal multiplexer (tmux) ###########################################
+  programs.tmux = {
+    enable = true;
+    mouse = true;
+    baseIndex = 1;
+    escapeTime = 10;
+    historyLimit = 10000;
+    terminal = "tmux-256color";
+    # Belgian AZERTY window navigation (matches Kitty and Herdr)
+    extraConfig = ''
+      # Top-row unshifted keys on Belgian AZERTY (& é " ' ( § è ! ç à) for windows 1..10
+      bind-key & select-window -t 1
+      bind-key é select-window -t 2
+      bind-key '"' select-window -t 3
+      bind-key \' select-window -t 4
+      bind-key ( select-window -t 5
+      bind-key § select-window -t 6
+      bind-key è select-window -t 7
+      bind-key ! select-window -t 8
+      bind-key ç select-window -t 9
+      bind-key à select-window -t 10
+
+      # Direct Alt+number navigation (matching Kitty and Herdr)
+      bind-key -n M-& select-window -t 1
+      bind-key -n M-é select-window -t 2
+      bind-key -n 'M-"' select-window -t 3
+      bind-key -n "M-'" select-window -t 4
+      bind-key -n M-( select-window -t 5
+      bind-key -n M-§ select-window -t 6
+      bind-key -n M-è select-window -t 7
+      bind-key -n M-! select-window -t 8
+      bind-key -n M-ç select-window -t 9
+      bind-key -n M-à select-window -t 10
+    '';
   };
 
   programs.zoxide.enable = true;

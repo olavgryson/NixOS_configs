@@ -67,7 +67,6 @@
     ## --- editors / IDEs ---
     vscode
     neovim
-    tmux
     t3code                             # Minimal web/desktop GUI for coding agents
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
