@@ -242,6 +242,73 @@ let
     esac
   '';
 
+  # ── Sleep & idle inhibitor CLI (waybar module) ───────────────────────────
+  # Toggles systemd-inhibit for sleep, idle, and lid switch. When active,
+  # prevents hypridle from locking/suspending and logind from suspending on lid close.
+  inhibitScript = pkgs.writeShellScriptBin "sleep-inhibit" ''
+    set -eu
+    PATH=${lib.makeBinPath [
+      pkgs.systemd
+      pkgs.procps
+      pkgs.coreutils
+      pkgs.libnotify
+    ]}
+
+    UNIT="sleep-inhibit.service"
+    SIG="7"
+
+    is_ac() {
+      [ "$(${pkgs.coreutils}/bin/cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0)" = "1" ]
+    }
+
+    is_active() {
+      systemctl --user is-active --quiet "$UNIT"
+    }
+
+    notify() {
+      notify-send -h string:x-canonical-private-synchronous:keep-awake \
+        -a "Keep Awake" "$1" "$2"
+    }
+
+    case "''${1:-status}" in
+      on)
+        systemctl --user start "$UNIT"
+        notify "Keep awake enabled" "Laptop will not sleep, even if lid is closed"
+        pkill -RTMIN+$SIG waybar 2>/dev/null || true
+        ;;
+      off)
+        systemctl --user stop "$UNIT"
+        notify "Keep awake disabled" "Normal sleep behavior restored"
+        pkill -RTMIN+$SIG waybar 2>/dev/null || true
+        ;;
+      toggle)
+        if is_active; then
+          systemctl --user stop "$UNIT"
+          notify "Keep awake disabled" "Normal sleep behavior restored"
+        else
+          systemctl --user start "$UNIT"
+          notify "Keep awake enabled" "Laptop will not sleep, even if lid is closed"
+        fi
+        pkill -RTMIN+$SIG waybar 2>/dev/null || true
+        ;;
+      status)
+        if is_active; then
+          printf '{"text":"󰅰","tooltip":"Keep awake: ACTIVE\\nLaptop will not sleep, even if lid is closed\\nClick to disable","class":"active"}\n'
+        else
+          if is_ac; then
+            printf '{"text":"󰛆","tooltip":"Keep awake: INACTIVE (on AC power — staying awake)\\nClick to force awake on battery","class":"inactive"}\n'
+          else
+            printf '{"text":"󰛆","tooltip":"Keep awake: INACTIVE\\nNormal sleep on idle / lid close\\nClick to keep awake","class":"inactive"}\n'
+          fi
+        fi
+        ;;
+      *)
+        echo "usage: sleep-inhibit {status|toggle|on|off}"
+        exit 1
+        ;;
+    esac
+  '';
+
   pythonForGtk = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
 
   brightnessPopover = pkgs.stdenv.mkDerivation {
@@ -636,8 +703,19 @@ EOF
   };
 in
 {
-  # The timer CLI used by the custom/timer module below.
-  home.packages = [ timerScript ];
+  # The timer CLI used by the custom/timer module below, and the sleep inhibitor CLI.
+  home.packages = [ timerScript inhibitScript ];
+
+  systemd.user.services.sleep-inhibit = {
+    Unit = {
+      Description = "Inhibit system sleep, idle and lid switch";
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=sleep:idle:handle-lid-switch --who=Waybar --why=\"Keep awake toggle\" ${pkgs.coreutils}/bin/sleep infinity";
+      Restart = "no";
+    };
+  };
 
   #### Status bar ############################################################
   # Without a config here, waybar falls back to /etc/xdg/waybar/config. That
@@ -650,8 +728,31 @@ in
   # ACPI read on the dock's power event. Either way the process dies or hangs
   # and `exec-once` never relaunches it. Running it as a user service with
   # Restart=on-failure brings the bar back automatically.
+  #
+  # Hyprland's Lua IPC only accepts Lua expressions after `dispatch`, but the
+  # hyprland/workspaces module hard-codes the legacy `dispatch workspace N`
+  # syntax for button clicks, so clicking a workspace silently does nothing.
+  # Patch the click handler to send the Lua equivalents.
   programs.waybar = {
     enable = true;
+    package = pkgs.waybar.overrideAttrs (old: {
+      postPatch = (old.postPatch or "") + ''
+        f=src/modules/hyprland/workspace.cpp
+        substituteInPlace $f \
+          --replace-fail '"dispatch focusworkspaceoncurrentmonitor " + std::to_string(id())' \
+                         '"dispatch hl.dsp.focus({ workspace = " + std::to_string(id()) + ", on_current_monitor = true })"' \
+          --replace-fail '"dispatch workspace " + std::to_string(id())' \
+                         '"dispatch hl.dsp.focus({ workspace = " + std::to_string(id()) + " })"' \
+          --replace-fail '"dispatch focusworkspaceoncurrentmonitor name:" + name()' \
+                         '"dispatch hl.dsp.focus({ workspace = \"name:" + name() + "\", on_current_monitor = true })"' \
+          --replace-fail '"dispatch workspace name:" + name()' \
+                         '"dispatch hl.dsp.focus({ workspace = \"name:" + name() + "\" })"' \
+          --replace-fail '"dispatch togglespecialworkspace " + name()' \
+                         '"dispatch hl.dsp.workspace.toggle_special(\"" + name() + "\")"' \
+          --replace-fail '"dispatch togglespecialworkspace"' \
+                         '"dispatch hl.dsp.workspace.toggle_special()"'
+      '';
+    });
     systemd.enable = true;
     settings.mainBar = {
       layer = "top";
@@ -665,6 +766,7 @@ in
         "cpu" "memory" "temperature"
         "power-profiles-daemon"
         "custom/disks" "bluetooth" "backlight" "custom/brightness" "pulseaudio" "network" "battery"
+        "custom/inhibit"
         "group/power"
       ];
 
@@ -856,6 +958,18 @@ in
         };
       };
 
+      # ── Keep awake / sleep inhibitor toggle ──────────────────────────────
+      # Left-click toggles inhibitor holding sleep, idle, and lid switch locks.
+      "custom/inhibit" = {
+        exec = "${inhibitScript}/bin/sleep-inhibit status";
+        return-type = "json";
+        format = "{}";
+        interval = 5;
+        signal = 7;
+        on-click = "${inhibitScript}/bin/sleep-inhibit toggle";
+        tooltip = true;
+      };
+
       "group/power" = {
         orientation = "inherit";
         drawer = {
@@ -986,7 +1100,7 @@ in
       #clock, #battery, #backlight, #pulseaudio, #network, #bluetooth,
       #power-profiles-daemon, #tray, #custom-disks,
       #cpu, #memory, #temperature,
-      #custom-timer,
+      #custom-timer, #custom-inhibit,
       #custom-power, #custom-lock, #custom-suspend, #custom-hibernate,
       #custom-reboot, #custom-shutdown,
       #custom-brightness-ext,
@@ -1014,6 +1128,9 @@ in
 
       /* Timer: sky while counting down. */
       #custom-timer { color: @sky; }
+
+      #custom-inhibit.active   { color: @ochre; }
+      #custom-inhibit.inactive { color: @muted; }
 
       #power-profiles-daemon              { color: @ochre; }
       #power-profiles-daemon.performance  { color: @alarm; }

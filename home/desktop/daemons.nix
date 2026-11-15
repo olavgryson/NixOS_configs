@@ -85,6 +85,86 @@ let
     if __name__ == "__main__":
         main()
   '';
+
+  # iPhone auto-mounter: detects USB iPhone connections via usbmuxd / idevice_id,
+  # automatically mounts the media directory (DCIM) to ~/iphone via ifuse, and
+  # unmounts cleanly on disconnect.
+  iphoneMounter = pkgs.writers.writePython3Bin "iphone-automount" { doCheck = false; } ''
+    import os
+    import sys
+    import time
+    import subprocess
+
+    mount_dir = os.path.expanduser("~/iphone")
+
+    def is_mounted():
+        try:
+            res = subprocess.run(["${pkgs.util-linux}/bin/mountpoint", "-q", mount_dir], check=False)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def get_connected_device():
+        try:
+            res = subprocess.run(
+                ["${pkgs.libimobiledevice}/bin/idevice_id", "-l"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            udids = [line.strip() for line in res.stdout.strip().splitlines() if line.strip()]
+            return udids[0] if udids else None
+        except Exception:
+            return None
+
+    def notify(urgency, title, body):
+        try:
+            subprocess.run([
+                "${pkgs.libnotify}/bin/notify-send",
+                "-u", urgency,
+                "-a", "iPhone",
+                "-i", "phone-apple-iphone",
+                title,
+                body
+            ], check=False)
+        except Exception:
+            pass
+
+    def main():
+        os.makedirs(mount_dir, exist_ok=True)
+        warned_passcode = False
+
+        while True:
+            dev = get_connected_device()
+            mounted = is_mounted()
+
+            if dev:
+                if not mounted:
+                    res = subprocess.run(
+                        ["${pkgs.ifuse}/bin/ifuse", mount_dir],
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    if res.returncode == 0:
+                        notify("normal", "iPhone Connected", "Mounted at ~/iphone. Photos & screenshots available in DCIM.")
+                        warned_passcode = False
+                    else:
+                        err = (res.stderr or "") + (res.stdout or "")
+                        if "passcode" in err.lower() and not warned_passcode:
+                            notify("critical", "iPhone Locked", "Unlock your iPhone with passcode to mount photos.")
+                            warned_passcode = True
+            else:
+                if mounted:
+                    subprocess.run(["/run/wrappers/bin/fusermount", "-uz", mount_dir], check=False)
+                    notify("low", "iPhone Disconnected", "Storage unmounted.")
+                warned_passcode = False
+
+            time.sleep(2)
+
+    if __name__ == "__main__":
+        main()
+  '';
 in
 {
   # Daemon that owns the gamma ramp and exposes it on DBus. It must run for the
@@ -116,6 +196,21 @@ in
     };
     Service = {
       ExecStart = "${batteryNotifier}/bin/battery-notifier";
+      Restart = "on-failure";
+      RestartSec = 2;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  systemd.user.services.iphone-automount = {
+    Unit = {
+      Description = "iPhone auto-mount daemon";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${iphoneMounter}/bin/iphone-automount";
+      ExecStop = "/run/wrappers/bin/fusermount -uz %h/iphone";
       Restart = "on-failure";
       RestartSec = 2;
     };

@@ -13,23 +13,28 @@ let
   diskNotifyHook = pkgs.writeShellScript "disk-notify-hook" ''
     ${pkgs.procps}/bin/pkill -RTMIN+9 waybar 2>/dev/null || true
   '';
+
+  startupCommands = [
+    "swaync"
+    "wl-paste --watch cliphist store"
+    "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
+    # Watches udisks2 (enabled in ../configuration.nix) and auto-mounts USB
+    # drives/SD cards on plug-in. No --tray: its icon didn't match the rest
+    # of the bar (see custom/disks above, which replaces it and uses
+    # --event-hook here to refresh on every mount/unmount).
+    "${pkgs.udiskie}/bin/udiskie --no-tray --event-hook ${diskNotifyHook}"
+  ];
 in
 {
   wayland.windowManager.hyprland = {
     enable = true;
     package = null;        # use the system Hyprland from programs.hyprland
     portalPackage = null;
+    # Hyprland 0.57 only reads Lua (hyprland.lua); a hyprlang hyprland.conf is
+    # ignored and the compositor falls back to its stock config. Each key of
+    # `settings` becomes an `hl.<key>(...)` call, list values one call per entry.
+    configType = "lua";
     settings = {
-      "$mod" = "SUPER";
-      "$term" = "kitty";
-      # -theme points at the runtime copy of the palette (see theme-switch.nix),
-      # so the launcher recolours on a live theme switch without a rebuild.
-      "$menu" = "rofi -show drun -theme ${config.home.homeDirectory}/.config/theme/rofi.rasi";
-      # The zen flake installs the binary as `zen-beta`, not `zen`; with "zen"
-      # the $mod+B bind silently does nothing.
-      "$browser" = "zen-beta";
-      "$files" = "nautilus";
-
       # ── Screens ─────────────────────────────────────────────────────────
       # The ultrawide sits ABOVE the laptop panel, not beside it. Hyprland has no
       # "above/below" keywords, only coordinates, so the layout is:
@@ -52,13 +57,14 @@ in
       # commit: Device or resource busy", i.e. dropped frames. At 120 that log is
       # clean (measured: 4 failures per 6 s at 144, 0 per 5 s at 120). The link
       # simply does not have the bandwidth.
+      # dragonflyg4's docked ultrawide first, then the panel; hosts without an
+      # external screen just get the panel plus the fallback.
       monitor =
-        # dragonflyg4's docked ultrawide first, then the panel; hosts without
-        # an external screen just get the panel plus the fallback line.
-        lib.optionals (monitors.externalMonitor != null) [ monitors.externalMonitor ]
+        lib.optionals (externalMonitor != null) [ externalMonitor ]
         ++ [
-          monitors.laptopMonitor
-          ",preferred,auto,1"          # fallback for unknown screens
+          laptopMonitor
+          # fallback for unknown screens
+          { output = ""; mode = "preferred"; position = "auto"; scale = "1"; }
         ];
 
       # Without XCURSOR_THEME in the session environment every client looks up
@@ -68,6 +74,7 @@ in
       # removes the guesswork; Hyprland exports these to everything it starts,
       # so compositor and clients agree.
 
+      config = {
       input = {
         kb_layout = "be";              # Belgian AZERTY
         # digits are on level-2 (Shift) of the number row, and Caps Lock's
@@ -75,7 +82,7 @@ in
         # Caps Lock yields the digits (tradeoff: À È É Ç uppercase gone).
         kb_options = "caps:digits_row";
         follow_mouse = 1;
-        touchpad = { natural_scroll = true; tap-to-click = true; };
+        touchpad = { natural_scroll = true; tap_to_click = true; };
       };
 
       general = {
@@ -86,8 +93,10 @@ in
         # The active border runs from sky to grain — the same transition the
         # painting makes top to bottom. Inactive windows get the tree shadow so
         # they recede.
-        "col.active_border" = "rgba(${raw.sky}ee) rgba(${raw.ochre}ee) 45deg";
-        "col.inactive_border" = "rgba(${raw.overlay}aa)";
+        col = {
+          active_border = { colors = [ "rgba(${raw.sky}ee)" "rgba(${raw.ochre}ee)" ]; angle = 45; };
+          inactive_border = "rgba(${raw.overlay}aa)";
+        };
       };
       # dwindle splits side by side while width > height * multiplier, so on an
       # ultrawide every new window would keep stacking left-to-right. 1.5 sits
@@ -95,49 +104,61 @@ in
       # still splits side by side, a half-screen pane splits top/bottom.
       dwindle.split_width_multiplier = 1.5;
 
-      # AI agent scratchpad: a special workspace with generous breathing room,
-      # toggled from anywhere (see the $mod+A bind in ../shortcuts.nix).
-      workspaces = [
-        "special:agent, gapsout:60, gapsin:0"
-      ];
-
-      # Hyprland >= 0.53 unified windowrulev2 into windowrule:
-      # `field value, condition` (conditions last, regex in ^...$).
-      windowrule = [
-        "float on, class:^(agent-scratchpad)$"
-        "size 75% 80%, class:^(agent-scratchpad)$"
-        "center on, class:^(agent-scratchpad)$"
-      ];
-
       decoration = {
         rounding = 8;
         blur = { enabled = true; size = 6; passes = 2; };
       };
+      };
+
+      # AI agent scratchpad: a special workspace with generous breathing room,
+      # toggled from anywhere (see the SUPER+A bind in ../shortcuts.nix).
+      workspace_rule = [
+        { workspace = "special:agent"; gaps_out = 60; gaps_in = 0; }
+      ];
+
+      # Ignore maximize requests sent by apps (e.g. Kitty, Steam, browsers)
+      # so they tile normally instead of spawning in fullscreen/maximized mode.
+      window_rule = [
+        {
+          name = "suppress-maximize-events";
+          match.class = ".*";
+          suppress_event = "maximize";
+        }
+        {
+          name = "agent-scratchpad";
+          match.class = "^(agent-scratchpad)$";
+          workspace = "special:agent";
+          float = true;
+          size = "75% 80%";
+          center = true;
+        }
+      ];
 
       # hyprpaper and hypridle are DELIBERATELY absent here: services.hyprpaper
       # and services.hypridle (bottom of this file) already create systemd user
       # units that start via hyprland-session.target -> graphical-session.target.
       # exec-once'ing them as well gives a second instance fighting over the same
       # wayland socket.
-      # nm-applet and blueman-applet are absent for a different reason: each adds
-      # its own systray icon on top of waybar's `network` and `bluetooth`
-      # modules, so you end up with duplicate wifi and bluetooth icons. The
-      # waybar modules stay (they follow the theme); clicking them still opens
-      # the GUIs: network -> networkmanager_dmenu (Wi-Fi picker), bluetooth ->
-      # blueman-manager.
+      # blueman-applet is absent for a different reason: it adds its own
+      # systray icon on top of waybar's `bluetooth` module; clicking that module
+      # opens blueman-manager instead. nm-applet does run (as a systemd user
+      # service, ./launcher.nix) because only it can join WPA-Enterprise
+      # networks.
       # waybar is deliberately absent here: it runs as its own systemd user
       # service (programs.waybar.systemd in ../desktop/bar.nix) so that a
       # monitor-hotplug crash or battery-module hang auto-restarts it instead
       # of being gone until the next login.
-      exec-once = [
-        "swaync"
-        "wl-paste --watch cliphist store"
-        "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
-        # Watches udisks2 (enabled in ../configuration.nix) and auto-mounts USB
-        # drives/SD cards on plug-in. No --tray: its icon didn't match the rest
-        # of the bar (see custom/disks above, which replaces it and uses
-        # --event-hook here to refresh on every mount/unmount).
-        "${pkgs.udiskie}/bin/udiskie --no-tray --event-hook ${diskNotifyHook}"
+      on = [
+        {
+          _args = [
+            "hyprland.start"
+            (lib.generators.mkLuaInline (
+              "function()\n"
+              + lib.concatMapStrings (c: "  hl.exec_cmd(${lib.generators.toLua { } c})\n") startupCommands
+              + "end"
+            ))
+          ];
+        }
       ];
     };
   };

@@ -26,6 +26,9 @@ home/
   webapps.nix               PWA launchers (SoundCloud, Snapchat)
 disko/
   laptop-luks.nix           declarative disk layout: LUKS2 + btrfs subvolumes
+  luks-boot.nix             initrd unlock + resume for hosts installed with it
+scripts/
+  install.sh                one-command install from the minimal ISO
 docs/
   installation.md           full install procedure (encrypted disk, per host)
   hibernation-ipu6.md       why hibernation aborts on this machine (IPU6 camera)

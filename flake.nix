@@ -24,6 +24,19 @@
       url = "github:jacopone/antigravity-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Claude Desktop: repackaged Anthropic official Linux .deb with FHS container for MCP servers.
+    claude-desktop = {
+      url = "github:aaddrick/claude-desktop-debian";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+
+    # Bleeding-edge nixpkgs-unstable input for developer tools that update faster
+    # than the NixOS channel (e.g. OpenAI Codex CLI).
+    nixpkgs-unstable = {
+      url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
@@ -34,12 +47,11 @@
       # through to the system modules AND the home-manager modules, so anything
       # machine-specific (monitor layout, rebuild alias, host-only packages)
       # can branch on it instead of living in duplicated files.
-      mkHost = hostName: hardwareModule:
+      mkHost = hostName: hardwareModules:
         nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = { inherit inputs hostName; };
-          modules = [
-            hardwareModule               # machine-specific, generated (see README)
+          modules = hardwareModules ++ [  # machine-specific (see README)
             ./configuration.nix
 
             home-manager.nixosModules.home-manager
@@ -57,7 +69,12 @@
           ];
         };
     in {
-      nixosConfigurations.dragonflyg4 = mkHost "dragonflyg4" ./hardware-configuration.nix;
-      nixosConfigurations.probook650  = mkHost "probook650"  ./hardware-probook650.nix;
+      nixosConfigurations.dragonflyg4 = mkHost "dragonflyg4" [ ./hardware-configuration.nix ];
+      # Installed with disko/laptop-luks.nix, so it also takes the matching
+      # initrd unlock module.
+      nixosConfigurations.probook650 = mkHost "probook650" [
+        ./hardware-probook650.nix
+        ./disko/luks-boot.nix
+      ];
     };
 }

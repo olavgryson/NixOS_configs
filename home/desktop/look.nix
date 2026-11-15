@@ -44,6 +44,15 @@ in
     # Obsidian etc. ignore the dark GTK theme and render light.
     gtk3.extraConfig = { gtk-application-prefer-dark-theme = 1; };
     gtk4.extraConfig = { gtk-application-prefer-dark-theme = 1; };
+    gtk3.bookmarks = [
+      "file://${config.home.homeDirectory}/Documents"
+      "file://${config.home.homeDirectory}/Downloads"
+      "file://${config.home.homeDirectory}/Pictures"
+      "file://${config.home.homeDirectory}/Music"
+      "file://${config.home.homeDirectory}/Videos"
+      "file://${config.home.homeDirectory}/GryveGlobal"
+      "file://${config.home.homeDirectory}/iphone iPhone"
+    ];
   };
 
   # The modern "dark mode" switch for GNOME-era portals and apps.
@@ -52,7 +61,7 @@ in
   # XCURSOR_* set the cursor for the compositor and every client too (see
   # the note on cursorTheme above), so nothing falls back to ~/.icons/default.
   wayland.windowManager.hyprland.settings.env = [
-    "XCURSOR_THEME,${cursorTheme}"
-    "XCURSOR_SIZE,${toString cursorSize}"
+    { _args = [ "XCURSOR_THEME" cursorTheme ]; }
+    { _args = [ "XCURSOR_SIZE" (toString cursorSize) ]; }
   ];
 }

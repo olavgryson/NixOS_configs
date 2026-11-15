@@ -37,23 +37,64 @@ in
   # Package overrides, e.g. the Upscayl onboarding patch in overlays/upscayl.nix
   nixpkgs.overlays = [
     (import ./overlays/upscayl.nix)
+    # Tolerate external kernel modules (such as VMware) that lack .ko.cer
+    # signing certificates. Without this, aggregateModules aborts on missing
+    # certificate files when concatenating entries from modules.dep.
+    (final: prev: {
+      # Pull Codex CLI from nixpkgs-unstable to follow rapid upstream bumps.
+      codex = inputs.nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.codex;
+
+      aggregateModules = modules:
+        (prev.aggregateModules modules).overrideAttrs (old: {
+          postBuild = builtins.replaceStrings
+            [ "xargs -d'\\n' cat >> modules.cer" ]
+            [ "while IFS= read -r cer; do [ -f \"$cer\" ] && cat \"$cer\" >> modules.cer; done || true" ]
+            old.postBuild;
+        });
+      # Disable test_is_valid which fails in the build sandbox due to keyutils
+      # keyring buffer alignment issues.
+      udiskie = prev.udiskie.overridePythonAttrs (old: {
+        disabledTests = (old.disabledTests or [ ]) ++ [ "test_is_valid" ];
+      });
+      # patchelf corrupts vmnet-natd's program headers when rewriting RPATH.
+      # Preserve the unpatched binary across autoPatchelf, set only its interpreter,
+      # and wrap it with LD_LIBRARY_PATH so it can load libssl/libcrypto.
+      vmware-workstation = prev.vmware-workstation.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cp $NIX_BUILD_TOP/unpacked/vmware-vmx/bin/vmnet-natd $NIX_BUILD_TOP/vmnet-natd.pristine
+        '';
+        preFixup = (old.preFixup or "") + ''
+          fixVmnetNatd() {
+            local interp
+            interp=$(patchelf --print-interpreter $out/bin/vmware-networks)
+            cp $NIX_BUILD_TOP/vmnet-natd.pristine $out/bin/.vmnet-natd-wrapped
+            chmod +x $out/bin/.vmnet-natd-wrapped
+            patchelf --set-interpreter "$interp" $out/bin/.vmnet-natd-wrapped
+            rm -f $out/bin/vmnet-natd
+            makeWrapper $out/bin/.vmnet-natd-wrapped $out/bin/vmnet-natd \
+              --prefix LD_LIBRARY_PATH : "$out/lib/vmware-ovftool"
+          }
+          postFixupHooks+=(fixVmnetNatd)
+        '';
+      });
+    })
   ];
 
   #### Boot / firmware ########################################################
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 10;   # keep ESP from overflowing
   boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelPackages = pkgs.linuxPackages_latest;     # good Raptor Lake support
+  boot.kernelPackages = pkgs.linuxPackages_latest;     # Linux 7.3, good Raptor Lake support
+  # fwupd (LVFS): `fwupdmgr refresh && fwupdmgr update` for BIOS/SSD/Thunderbolt
+  # firmware. HP ships this machine's BIOS as a signed UEFI capsule, so updates
+  # install straight from Linux — no Windows or bootable USB needed.
+  services.fwupd.enable = true;
 
   #### Nix #####################################################################
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.auto-optimise-store = true;
-  nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 30d"; };
+  nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 7d"; };
   nixpkgs.config.allowUnfree = true;   # spotify, vscode, discord, steam, obsidian...
-  # IntelliJ IDEA (idea-oss) is flagged insecure over a CVE in the bundled
-  # JetBrains runtime. Allowed by name, so it survives version bumps.
-  nixpkgs.config.allowInsecurePredicate = pkg:
-    builtins.elem (lib.getName pkg) [ "idea-oss" ];
 
   #### Identity / locale ######################################################
   networking.hostName = hostName;
@@ -69,7 +110,33 @@ in
 
   #### Networking #############################################################
   networking.networkmanager.enable = true;
-  services.tailscale.enable = true;
+  # Captive portals (guest Wi-Fi with a browser login page). NixOS ships no
+  # connectivity URI, so NetworkManager never notices a portal; enable the
+  # check, and when it reports PORTAL open a plain-HTTP page in the user's
+  # browser so the network can redirect it to its login page. Hyprland has
+  # no desktop shell that would do this.
+  networking.networkmanager.settings.connectivity = {
+    uri = "http://nmcheck.gnome.org/check_network_status.txt";
+    interval = 60;
+  };
+  networking.networkmanager.dispatcherScripts = [{
+    type = "basic";
+    source = pkgs.writeShellScript "captive-portal" ''
+      [ "$2" = connectivity-change ] && [ "$CONNECTIVITY_STATE" = PORTAL ] || exit 0
+      ${pkgs.systemd}/bin/systemd-run --user --machine=ogryson@ --collect \
+        ${pkgs.xdg-utils}/bin/xdg-open http://nmcheck.gnome.org/
+    '';
+  }];
+  services.netbird.enable = true;
+  # Without resolved, NetBird takes over /etc/resolv.conf and forwards to the
+  # upstream it saw at startup; after switching networks (e.g. to a hotspot)
+  # that upstream is unreachable and all DNS fails. With resolved, NetBird only
+  # registers its own domain on wt0 and NetworkManager's DNS follows the network.
+  services.resolved.enable = true;
+  programs.localsend = {
+    enable = true;
+    openFirewall = true;
+  };
 
   #### Graphics (Intel Iris Xe / Raptor Lake) #################################
   hardware.graphics = {
@@ -189,21 +256,46 @@ in
 
   #### Virtualisation / containers / local LLM ################################
   virtualisation.docker.enable = true;
-  virtualisation.libvirtd.enable = true;
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu.swtpm.enable = true;
+  };
+  virtualisation.vmware.host.enable = true;
   programs.virt-manager.enable = true;
   services.ollama.enable = true;   # no models auto-pulled; pull manually when needed
+  programs.nix-ld.enable = true;   # run non-Nix dynamically-linked binaries (npm-installed CLIs etc.)
 
   #### Gaming #################################################################
   programs.steam.enable = true;   # pulls 32-bit stack
   programs.steam.remotePlay.openFirewall = true;
+  services.flatpak.enable = true; # enables Flathub for games/apps with proprietary FHS runtimes (e.g. official Minecraft launcher)
 
-  #### Swap + hibernate #######################################################
-  # zram = fast compressed RAM swap for daily use.
+  #### Swap, memory & hibernate ################################################
+  # zram compressed RAM swap for daily use. Sized at 100% of RAM (16 GB virtual
+  # swap device). zstd achieves ~2.7:1 compression, consuming ~6 GB physical RAM
+  # when fully saturated.
+  zramSwap = {
+    enable = true;
+    memoryPercent = 100;
+  };
+
+  # Tune memory subsystem for zram:
+  # - swappiness = 150: aggressively swap anonymous pages into zram to preserve
+  #   page cache for disk I/O and builds.
+  # - page-cluster = 0: disables swap readahead clustering (reads 1 page at a time),
+  #   eliminating read-amplification latency on non-rotational swap.
+  boot.kernel.sysctl = {
+    "vm.swappiness" = 150;
+    "vm.page-cluster" = 0;
+  };
+
+  # Kernel Samepage Merging (KSM): deduplicates identical memory pages (e.g. across VMs).
+  hardware.ksm.enable = true;
+
   # The on-disk SWAP partition (>= RAM, see README) is the hibernate image
   # target. Hibernation tuning is dragonflyg4-only: its firmware needs the
   # workarounds below; other hosts use plain defaults until proven otherwise.
-  zramSwap.enable = true;
-  boot.resumeDevice = lib.mkIf isDragonfly "/dev/disk/by-label/SWAP";
+  boot.resumeDevice = lib.mkIf isDragonfly "/dev/disk/by-label/SWAP";  # disko hosts: ./disko/luks-boot.nix
   # swapDevices for the SWAP partition is normally written by
   # nixos-generate-config (run `swapon /dev/disk/by-label/SWAP` before
   # generating). If it isn't, uncomment:
@@ -250,6 +342,20 @@ in
     echo "battery after resume: $(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/capacity)% ($(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/status))"
   '';
   services.power-profiles-daemon.enable = true;
+  # Intel thermal daemon: keeps the CPU out of thermal throttle zones and
+  # parks cores in deeper C-states when idle. Standard on every Intel laptop
+  # distro; without it Raptor Lake runs hotter and burns more wattage.
+  services.thermald.enable = true;
+
+  # Radio power saving for Wi-Fi while associated. Negligible latency cost,
+  # meaningful idle draw reduction on battery.
+  networking.networkmanager.wifi.powersave = true;
+
+  # Let the HDA codec drop into D3 when no stream is open (~0.5 W saved).
+  # PipeWire releases devices when idle, so this engages between sounds.
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=1
+  '';
 
   #### Power Management & UPower Daemon #######################################
   services.upower = {
@@ -270,6 +376,8 @@ in
   # it then sat frozen and powered until morning. Do not put it back until
   # `systemctl hibernate` is verified to actually power the machine off.
   services.logind.settings.Login.HandleLidSwitch = "suspend";
+  # Lid closed on AC power: do not sleep, keep working even without an external monitor.
+  services.logind.settings.Login.HandleLidSwitchExternalPower = "ignore";
   # Lid closed WITH an external screen attached: do not sleep, keep working.
   # logind calls that "docked" and counts "more than one display connected" as
   # docked too, so this covers the ultrawide with or without a docking station.
@@ -325,6 +433,8 @@ in
   # piece that watches udisks2 and triggers the automount on plug-in itself.
   services.udisks2.enable = true;
   services.gvfs.enable = true;
+  # usbmuxd multiplexes USB connections to iOS devices for AFC (gvfs-afc) and ifuse.
+  services.usbmuxd.enable = true;
 
   #### btrfs snapshots (snapper) ###############################################
   # Hourly timeline snapshots of / and /home, pruned by age. Rollback of / is
@@ -387,7 +497,7 @@ in
       "wheel"          # sudo
       "networkmanager"
       "audio" "video" "render"
-      "docker" "libvirt" "kvm"
+      "docker" "libvirtd" "kvm"
       "lp" "scanner"   # printing / scanning
       "dialout" "plugdev" "i2c"
       "ollama"
@@ -416,8 +526,10 @@ in
   environment.systemPackages = with pkgs; [
     git vim wget curl
     pciutils usbutils
+    libimobiledevice ifuse     # iOS USB communication and filesystem mounting
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
+    netbird-ui
     f3d                        # fast 3D model viewer (glTF/glb, obj, stl)
     # Short name for the passwordless rebuild command above.
     (writeShellScriptBin "rebuild" ''

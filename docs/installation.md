@@ -39,9 +39,9 @@ On an external disk, and **verified before anything is wiped**:
 
 1. Write the NixOS **minimal** ISO to a USB stick. No desktop needed — the
    desktop is built from this config.
-2. Boot it in UEFI mode, secure boot off.
-3. Network: `nmtui` (or `wpa_supplicant`), then confirm with `ping nixos.org`.
-4. Get the repo onto the machine, picking the branch to install:
+2. Boot it in UEFI mode, secure boot off (HP: `F10` setup, `F9` boot menu).
+3. Network: `nmtui`, then confirm with `ping -c2 nixos.org`.
+4. Get the repo, on the branch that holds the host:
 
    ```bash
    nix-shell -p git
@@ -50,41 +50,32 @@ On an external disk, and **verified before anything is wiped**:
    ```
 
    The install needs the network anyway — `nixos-install` pulls everything from
-   `cache.nixos.org` — so cloning from GitHub is simpler than carrying the repo
-   on the stick. Set the remote back to SSH after the install:
-   `git remote set-url origin git@github.com:olavgryson/NixOS_configs.git`.
-
-   **A Ventoy stick cannot serve as the repo drive.** While Ventoy is serving
-   the ISO, device-mapper holds the whole disk open exclusively, so mounting its
-   data partition fails with `can't open blockdev`, read-only included. Offline
-   installs need a *second* stick, or the ISO written to a plain stick with `dd`
-   so Ventoy is free to be mounted.
+   `cache.nixos.org`. **A Ventoy stick cannot serve as an offline repo drive**:
+   while it serves the ISO, device-mapper holds the whole disk open.
 
 ---
 
-## 2. Partition, encrypt, format
+## 2. Install (one command)
 
-One command does the whole disk. Swap must be at least as large as RAM,
-otherwise hibernation has nowhere to write its image:
+`flake.nix` defines one `nixosConfigurations.<host>` per machine (currently
+`dragonflyg4` and `probook650`). With `lsblk` confirm the target disk, then:
 
 ```bash
-lsblk                                    # confirm the target disk
-(umask 077; read -rsp 'disk passphrase: ' pw; printf %s "$pw" > /tmp/disk.key)
-
-sudo nix --experimental-features 'nix-command flakes' run github:nix-community/disko -- \
-  --mode destroy,format,mount ./disko/laptop-luks.nix \
-  --argstr device /dev/nvme0n1 \
-  --argstr swapSize 17G          # >= RAM: 16G RAM -> 17G
-
-rm /tmp/disk.key                         # tmpfs, but do not leave it lying around
+./scripts/install.sh probook650 /dev/sda 17G   # host, disk, swap >= RAM
 ```
 
-`--mode destroy,format,mount` wipes the disk, creates the layout and mounts it
-under `/mnt`. Add `--dry-run` first to print the script without touching
-anything. Arguments per machine: `device` (`/dev/nvme0n1` or `/dev/sda`) and
-`swapSize`.
+The script, in order:
 
-What it builds — see `disko/laptop-luks.nix` for the authoritative version:
+1. Frees the disk from any earlier attempt (swap, `/mnt`, open LUKS mappings).
+2. Asks the disk passphrase twice, into a tmpfs key file that is removed after.
+3. Runs disko with `disko/laptop-luks.nix` (`--mode destroy,format,mount`).
+4. Writes `nixos-generate-config --show-hardware-config` to the host's
+   hardware file and stages it — flakes only read tracked files.
+5. `nixos-install --flake .#<host> --no-root-passwd`.
+6. Copies the repo to `/home/ogryson/nixos-config` on the new system, with the
+   SSH remote, so `rebuild` works on first boot.
+
+What disko builds — see `disko/laptop-luks.nix` for the authoritative version:
 
 | Partition | Size       | Contents                                              |
 |-----------|------------|-------------------------------------------------------|
@@ -92,87 +83,24 @@ What it builds — see `disko/laptop-luks.nix` for the authoritative version:
 | swap      | `swapSize` | LUKS2 `cryptswap` → swap labelled `SWAP`               |
 | root      | rest       | LUKS2 `cryptroot` → btrfs `NIXOS`, subvolumes `@`, `@home`, `@nix` (`compress=zstd,noatime`) |
 
-Both containers get the same passphrase from the key file, so it is typed once
-here and once per boot — see *One password instead of two* below to drop even
-that second prompt.
-
 Why an encrypted swap **partition** rather than a random-key swap or a btrfs
 swapfile: a random key can only be unlocked after boot, which rules out resume
 from hibernation, and a swapfile needs a `resume_offset` that shifts whenever
 the file is recreated. A LUKS partition is unlocked in the initrd, before
 resume, and keeps its label.
 
----
-
-## 3. Generate the hardware configuration
-
-```bash
-sudo nixos-generate-config --root /mnt
-```
-
-This is the one file the repo cannot ship: real disk UUIDs, kernel modules,
-`fileSystems`. Then check what it wrote for the encrypted devices:
-
-```bash
-grep -A2 'luks\|swapDevices' /mnt/etc/nixos/hardware-configuration.nix
-```
-
-It emits a `boot.initrd.luks.devices` entry for the container holding root. It
-does **not** reliably emit one for swap — without that entry the machine boots
-but never resumes from hibernation, and `swapDevices` points at a device that
-does not exist yet. Add what is missing, using the UUID of the raw partition
-(`blkid /dev/nvme0n1p2`), not of the mapper:
-
-```nix
-boot.initrd.luks.devices."cryptswap".device = "/dev/disk/by-uuid/<uuid-of-the-swap-partition>";
-swapDevices = [ { device = "/dev/disk/by-label/SWAP"; } ];
-
-# One prompt for both containers: systemd in the initrd caches the first
-# passphrase and retries it on the remaining LUKS devices. Encrypted hosts
-# only -- this cannot live in configuration.nix conditioned on
-# `boot.initrd.luks.devices`, because the LUKS module reads this option back
-# and the evaluation loops.
-boot.initrd.systemd.enable = true;
-```
-
-These are the only hand-written additions to a generated hardware file;
-everything else stays as `nixos-generate-config` wrote it.
-
----
-
-## 4. Install
-
-`flake.nix` defines one `nixosConfigurations.<host>` attribute per machine —
-currently `dragonflyg4` and `probook650`, both built from the same modules via
-`mkHost`. A new machine needs its own `mkHost` line there, and its own hardware
-file, before this works.
-
-Install from the clone made in step 1 — there is nothing left to clone here:
-
-```bash
-cd ~/nixos-config
-# each host has its own hardware file: hardware-configuration.nix for
-# dragonflyg4, hardware-probook650.nix for probook650
-cp /mnt/etc/nixos/hardware-configuration.nix ./hardware-probook650.nix
-git add .                                  # flakes only read git-tracked files
-sudo nixos-install --flake .#probook650 --no-root-passwd
-```
-
-Then put the config on the installed system, or the first `rebuild` after boot
-has nothing to build from:
-
-```bash
-sudo mkdir -p /mnt/home/ogryson
-sudo cp -a ~/nixos-config /mnt/home/ogryson/
-sudo chown -R 1000:100 /mnt/home/ogryson    # uid 1000 / gid 100 = ogryson:users
-```
+The generated hardware file emits the LUKS entry for root, but not reliably the
+one for swap. `disko/luks-boot.nix` (imported by every disko-installed host in
+`flake.nix`) adds it by disko's partition label, plus the resume device, so the
+generated file is used unedited. Both containers share one passphrase and the
+systemd initrd asks for it once.
 
 Reboot, remove the USB stick. The LUKS passphrase prompt appears before the
 ReGreet login screen.
 
 ---
 
-## 5. First boot
+## 3. First boot
 
 1. `passwd` — the config ships `initialPassword = "changeme"` and root is
    locked; administration goes through `sudo`.
@@ -203,8 +131,8 @@ systemd-cryptenroll --tpm2-device=list
 Enroll both containers, binding the key to firmware and secure-boot state:
 
 ```bash
-sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=0+7 /dev/nvme0n1p3
-sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=0+7 /dev/nvme0n1p2
+sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=0+7 /dev/disk/by-partlabel/disk-main-root
+sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=0+7 /dev/disk/by-partlabel/disk-main-swap
 ```
 
 Then tell the initrd to use it, in the host's hardware file, and `rebuild`:
@@ -240,6 +168,6 @@ it has the desktop, and the lock screen still asks the user password.
   reinstalled with this procedure.
 - **Header backup.** A damaged LUKS header makes the disk unrecoverable even
   with the right passphrase. Keep one off-machine:
-  `sudo cryptsetup luksHeaderBackup /dev/nvme0n1p3 --header-backup-file luks-root.img`
-- **Second passphrase.** `sudo cryptsetup luksAddKey /dev/nvme0n1p3` adds a
+  `sudo cryptsetup luksHeaderBackup /dev/disk/by-partlabel/disk-main-root --header-backup-file luks-root.img`
+- **Second passphrase.** `sudo cryptsetup luksAddKey /dev/disk/by-partlabel/disk-main-root` adds a
   slot, so a forgotten primary passphrase is not a reinstall.

@@ -3,30 +3,40 @@
 #  (Hyprland/Wayland desktop packages live in ./desktop.nix.)
 #  home.packages merges across modules, so this list is desktop-free on purpose.
 ################################################################################
-{ pkgs, inputs, hostName, lib, ... }:
-let
-  # idea-oss has no cached binary on some nixpkgs snapshots and then compiles
-  # from source, which OOMs the small-RAM machines. Keep it on the big laptop
-  # only; re-enable per host if a snapshot with a cached build lands.
-  bigMachine = hostName == "dragonflyg4";
-in
+{ pkgs, inputs, ... }:
 {
-  home.packages = with pkgs;
-    [
+  home.packages = with pkgs; [
     ## --- the thing you want first ---
-    # claude-code: nixpkgs lags behind Claude's release cadence (ships 2.1.234
-    # while upstream is at 2.1.237), so pin the tarball ourselves. To bump:
-    # `nix-prefetch-url --type sha256 <releases-url>/<version>/linux-x64/claude`
-    # and update version+sha256 here.
-    (claude-code.overrideAttrs (old: {
-      version = "2.1.237";
-      src = pkgs.fetchurl {
-        url = "https://downloads.claude.ai/claude-code-releases/2.1.237/linux-x64/claude";
-        sha256 = "05irzfmk91s58z9gbgkf8nwfnmqng2a4jqfndz7r71hhy1km35vk";
-      };
-    }))
+    # claude-code comes from nixpkgs, which tracks Claude's release cadence.
+    # Do NOT pin the tarball with overrideAttrs: upstream changes the binary
+    # format without notice and a pinned fetchurl then stops unpacking.
+    claude-code                        # Anthropic Claude, terminal coding agent
     codex                              # OpenAI Codex, terminal coding agent
-    opencode                           # AI coding agent, terminal
+    # opencode: upstream releases move fast, so pin the binary tarball
+    # directly. To bump: update version + sha256 (served from opencode.ai/files/bin).
+    (stdenv.mkDerivation rec {
+      pname = "opencode";
+      version = "2.0.18";
+      src = fetchurl {
+        url = "https://opencode.ai/files/bin/${version}/opencode-linux-x64.tar.gz";
+        sha256 = "0plk6w793jdgc6w14qw471q0mkyfay06pip4wgnkl212gxxpw9b2";
+      };
+      nativeBuildInputs = [ autoPatchelfHook makeBinaryWrapper ];
+      buildInputs = [ stdenv.cc.cc.lib ];
+      sourceRoot = ".";
+      dontStrip = true;
+      installPhase = ''
+        install -Dm755 opencode $out/bin/opencode
+        wrapProgram $out/bin/opencode \
+          --prefix PATH : ${lib.makeBinPath [ ripgrep ]} \
+          --set OPENCODE_DISABLE_AUTOUPDATE true
+      '';
+      meta = {
+        description = "AI coding agent built for the terminal";
+        homepage = "https://github.com/anomalyco/opencode";
+        mainProgram = "opencode";
+      };
+    })
     github-copilot-cli                 # GitHub Copilot, terminal
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
@@ -49,17 +59,63 @@ in
     (pipx.overridePythonAttrs (o: { doCheck = false; doInstallCheck = false; }))
     php sqlite postgresql redis        # db clients / runtimes (php-mysql, postgresql-client, redis-server)
     docker-compose
+    minikube kubeconform               # local Kubernetes cluster (bundles kubectl), manifest validator
+    ansible
     gnumake gcc cmake                  # build toolchain
     sox                                # audio synth/play — timer alarm beep
 
     ## --- editors / IDEs ---
     vscode
     neovim
-    tmux
+    t3code                             # Minimal web/desktop GUI for coding agents
     inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
     ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq glib
+    # Helper to jump to a tab by 0-based index in the active Herdr workspace.
+    # Required for AZERTY keyboards where top row keys produce & é " ' ( § è ! ç à
+    # instead of digits 1..9, so Herdr's built-in 1..9 range keybinding does not match.
+    (pkgs.writeShellScriptBin "herdr-focus-tab" ''
+      exec ${pkgs.python3}/bin/python3 - "$@" <<'PYEOF'
+import sys, os, subprocess, json
+
+def main():
+    if len(sys.argv) < 2:
+        return
+    try:
+        idx = int(sys.argv[1])
+    except ValueError:
+        return
+
+    bin_path = os.environ.get("HERDR_BIN_PATH", "herdr")
+    ws = os.environ.get("HERDR_ACTIVE_WORKSPACE_ID")
+
+    if not ws:
+        try:
+            snap = subprocess.check_output([bin_path, "api", "snapshot"], stderr=subprocess.DEVNULL)
+            ws = json.loads(snap).get("result", {}).get("snapshot", {}).get("focused_workspace_id")
+        except Exception:
+            pass
+
+    cmd = [bin_path, "tab", "list"]
+    if ws:
+        cmd.extend(["--workspace", ws])
+
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+        data = json.loads(out)
+        tabs = data.get("result", {}).get("tabs", [])
+        if 0 <= idx < len(tabs):
+            tab_id = tabs[idx].get("tab_id")
+            if tab_id:
+                subprocess.run([bin_path, "tab", "focus", tab_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+if __name__ == "__main__":
+    main()
+PYEOF
+    '')
     glow                               # render .md in the terminal
     htop btop fastfetch fetch ncdu
     gocryptfs sshfs                    # encrypted FUSE fs + remote ssh mounts
@@ -67,21 +123,70 @@ in
     nmap                               # network scanner (CLI)
     imagemagick pandoc                 # image convert + document convert
     pdftk qpdf poppler-utils           # PDF tools (merge, shuffle, split)
+    timg zathura                       # terminal PDF/image viewer and lightweight document viewer
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
+    inputs.claude-desktop.packages.${pkgs.system}.default # Claude Desktop (Anthropic Linux build in FHS container for MCP)
     # Obsidian ignores the system dark-mode preference (its Chromium build never
     # queries gtk-application-prefer-dark-theme), so force Chromium's own switch.
     (pkgs.writeShellScriptBin "obsidian" ''
       exec ${pkgs.obsidian}/bin/obsidian --force-dark-mode "$@"
     '')
     discord
+    gnome-calculator                    # GUI calculator
     spotify
+    # spotifast: lightweight native Spotify client in Rust. Upstream prebuilt
+    # binary pinned to 0.16.0 (nixpkgs currently lags at 0.13.0).
+    (stdenv.mkDerivation rec {
+      pname = "spotifast";
+      version = "0.16.0";
+      src = fetchurl {
+        url = "https://github.com/crmne/spotifast/releases/download/v${version}/spotifast-v${version}-x86_64-unknown-linux-gnu.tar.gz";
+        sha256 = "sha256-JSvrD6Q9Y1vSb67F7G2wW4oHCQIyNWztJvVL9ONqaGo=";
+      };
+      nativeBuildInputs = [ autoPatchelfHook makeWrapper ];
+      buildInputs = [
+        stdenv.cc.cc.lib
+        alsa-lib
+        libpulseaudio
+        pipewire
+      ];
+      installPhase = ''
+        install -Dm755 spotifast $out/bin/spotifast
+        install -Dm644 packaging/applications/spotifast.desktop $out/share/applications/spotifast.desktop
+        install -Dm644 packaging/icons/spotifast.svg $out/share/icons/hicolor/scalable/apps/spotifast.svg
+
+        wrapProgram $out/bin/spotifast \
+          --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [
+            dbus
+            libxkbcommon
+            wayland
+            libGL
+            libx11
+            libxcursor
+            libxi
+            libxrandr
+          ]}"
+      '';
+      meta = {
+        description = "Fast native Spotify client with local playback and Spotify Connect";
+        homepage = "https://spotifast.rocks";
+        mainProgram = "spotifast";
+      };
+    })
     vlc                                # mpv is not here: see programs.mpv below
     obs-studio
-    libreoffice-fresh hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
+    libreoffice-stable hunspell hunspellDicts.nl_NL hunspellDicts."en_GB-ise"
     angryipscanner                     # network scanner GUI
-    handy                              # local Whisper push-to-talk dictation, fully offline
+    cisco-packet-tracer_9              # Cisco network simulation tool
+    # Dictation stack (~/.local/dict, bound to $mod+F5 and $mod+F7).
+    # whisper-cpp-vulkan, not plain whisper-cpp: the Iris Xe GPU runs
+    # large-v3-turbo ~2.7x realtime where the CPU backend needs 8x realtime,
+    # and the CPU backend's repacked-quant path returns token soup for the
+    # q5_0 large models — same file transcribes correctly on Vulkan.
+    whisper-cpp-vulkan                 # whisper-cli, GPU-accelerated
+    wtype                              # types the transcript into the focused window
     upscayl                            # AI image upscaler GUI
 
     ## --- creative / 3D / making ---
@@ -100,10 +205,7 @@ in
     ## --- wine / gaming extras ---
     # wineWowPackages.stable           # DISABLED: source compile, see above
     winetricks
-  ]
-  # IntelliJ IDEA (open-source build; idea-community discontinued). Big
-  # machine only — see `bigMachine` above.
-  ++ lib.optionals bigMachine [ jetbrains.idea-oss ];
+  ];
 
   ## --- mpv: hardware video decoding on the Iris Xe (VAAPI/iHD) -------------
   #  mpv defaults to hwdec=no, so 1080p HEVC was decoded entirely on the CPU

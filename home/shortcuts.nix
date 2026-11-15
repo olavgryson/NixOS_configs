@@ -5,7 +5,8 @@
 let
   homeDir = config.home.homeDirectory;
   monitors = import ./desktop/monitors.nix { inherit pkgs hostName; };
-  inherit (monitors) laptopMonitor;
+  inherit (monitors) laptopMonitor enableMonitorLua disableMonitorLua;
+  hyprctl = "${pkgs.hyprland}/bin/hyprctl";
   # Lid closed: turn the laptop panel off, BUT only if another screen remains.
   # Without that check, closing the lid on the road would switch off your only
   # screen and leave you in the dark with a running session. `hyprctl monitors`
@@ -14,21 +15,21 @@ let
     others=$(${pkgs.hyprland}/bin/hyprctl -j monitors \
       | ${pkgs.jq}/bin/jq '[.[] | select(.name != "eDP-1")] | length')
     if [ "''${others:-0}" -gt 0 ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword monitor "eDP-1,disable"
+      ${hyprctl} eval '${disableMonitorLua laptopMonitor.output}'
     fi
   '';
 
   # Lid opened: panel back. If it was still on (because lidClose above never
   # switched it off) this is a no-op that just re-applies the same layout.
   lidOpen = pkgs.writeShellScript "lid-open" ''
-    ${pkgs.hyprland}/bin/hyprctl keyword monitor "${laptopMonitor}"
+    ${hyprctl} eval '${enableMonitorLua laptopMonitor}'
   '';
 
   # ── Re-apply the lid state after a config reload ──────────────────────────
-  # `hyprctl keyword monitor "eDP-1,disable"` from lidClose above is RUNTIME
-  # state; the `monitor =` list in ./desktop.nix is the config. Hyprland
+  # The `hl.monitor` call that lidClose above evals is RUNTIME state; the
+  # monitor list in ./desktop/wm.nix is the config. Hyprland
   # auto-reloads that config whenever the file changes, and `rebuild` changes it
-  # on every switch (home-manager repoints ~/.config/hypr/hyprland.conf at a new
+  # on every switch (home-manager repoints ~/.config/hypr/hyprland.lua at a new
   # store path). The reload re-applies `eDP-1,1920x1280@60,760x1440,1` verbatim,
   # so the panel comes back even with the lid shut — and Hyprland hands the
   # workspaces that had fallen onto the external ultrawide straight back to it.
@@ -59,12 +60,12 @@ let
     done
 
     if [ "$(others)" -gt 0 ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword monitor "eDP-1,disable"
+      ${hyprctl} eval '${disableMonitorLua laptopMonitor.output}'
     fi
   '';
 
   # Screenshot of the active window. A separate script because the geometry
-  # contains a comma ("x,y WxH") and Hyprland splits bind lines on commas.
+  # contains a comma ("x,y WxH") that would need escaping inside a bind.
   screenshotWindow = pkgs.writeShellScript "screenshot-window" ''
     geom=$(hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')
     grim -g "$geom" - | swappy -f -
@@ -140,7 +141,9 @@ let
 
   # Searchable cheat sheet of every active keybinding. hyprctl reports modmask
   # numbers (bitfield: SHIFT=1 CTRL=4 ALT=8 SUPER=64); jq turns them into names
-  # so the list reads like documentation instead of a bitmask dump. Plain
+  # so the list reads like documentation instead of a bitmask dump. Only
+  # binds with a `description` are listed: under the Lua config the raw
+  # dispatcher field is an opaque handle, not something readable. Plain
   # dmenu mode: picking an entry just prints it, which we discard.
   # -theme: the runtime palette copy (see ./desktop/theme-switch.nix), so the sheet matches whatever theme is active.
   keybindCheatSheet = pkgs.writeShellScript "keybinding-cheatsheet" ''
@@ -152,13 +155,11 @@ let
             (if ($m/8|floor)%2==1  then "ALT"  else empty end),
             (if $m%2==1            then "SHIFT" else empty end)
           ] | join("+");
-          [.[] |
+          [.[] | select(.has_description) |
             (mods(.modmask)
              + (if .modmask > 0 then "+" else "" end)
-             + .key + "  -  "
-             + (if .description == ""
-                then (.dispatcher + " " + .arg)
-                else .description end))]
+             + (if .key == "" then "code:\(.keycode)" else .key end)
+             + "  -  " + .description)]
           | sort | join("\n")' \
       | ${pkgs.rofi}/bin/rofi -dmenu -i -p Keybindings \
           -theme ${homeDir}/.config/theme/rofi.rasi >/dev/null
@@ -174,7 +175,7 @@ let
          | ${pkgs.jq}/bin/jq -e 'any(.[]; .class == "agent-scratchpad")' >/dev/null; then
       ${pkgs.kitty}/bin/kitty --class agent-scratchpad agy &
     fi
-    ${pkgs.hyprland}/bin/hyprctl dispatch togglespecialworkspace agent
+    ${hyprctl} dispatch 'hl.dsp.workspace.toggle_special("agent")'
   '';
 
   # Cycles the power profile performance -> balanced -> power-saver and wraps
@@ -192,112 +193,155 @@ let
     ${pkgs.power-profiles-daemon}/bin/powerprofilesctl set "$next"
     ${pkgs.libnotify}/bin/notify-send -a "Power Profile" "Power Profile" "<b>$next</b>"
   '';
+
+  # ── Bind helpers ──────────────────────────────────────────────────────────
+  # Hyprland 0.57 binds are Lua: hl.bind("SUPER + Q", <dispatcher>, { opts }).
+  # `toLua` quotes a Nix string as a Lua string literal.
+  toLua = lib.generators.toLua { };
+  mkLuaInline = lib.generators.mkLuaInline;
+  term = "kitty";
+  # -theme points at the runtime copy of the palette (see
+  # ./desktop/theme-switch.nix), so the launcher recolours on a live theme
+  # switch without a rebuild.
+  menu = "rofi -show drun -theme ${homeDir}/.config/theme/rofi.rasi";
+  # The zen flake installs the binary as `zen-beta`, not `zen`; with "zen"
+  # the $mod+B bind silently does nothing.
+  browser = "zen-beta";
+  files = "nautilus";
+
+  exec = cmd: "hl.dsp.exec_cmd(${toLua cmd})";
+  bindWith = opts: key: dispatcher: {
+    _args = [ key (mkLuaInline dispatcher) ] ++ lib.optional (opts != { }) opts;
+  };
+  bind = bindWith { };
+  # Described bind: the description shows up in the SUPER+/ cheat sheet.
+  bindd = description: bindWith { inherit description; };
+  # `bindl`: also fires while the screen is locked.
+  bindl = bindWith { locked = true; };
+  # `bindel`: locked, and repeats while the key is held.
+  bindel = bindWith { locked = true; repeating = true; };
+  bindm = bindWith { mouse = true; };
+
+  resize = x: y: "hl.dsp.window.resize({ x = ${toString x}, y = ${toString y}, relative = true })";
+
 in
 {
   wayland.windowManager.hyprland.settings = {
     # Runs on startup AND on every config reload — see the lidSync comment above.
-    exec = [ "${lidSync}" ];
+    on = [
+      {
+        _args = [
+          "hyprland.start"
+          (mkLuaInline "function() hl.exec_cmd(${toLua "${lidSync}"}) end")
+        ];
+      }
+      {
+        _args = [
+          "config.reloaded"
+          (mkLuaInline "function() hl.exec_cmd(${toLua "${lidSync}"}) end")
+        ];
+      }
+    ];
 
     # ── Modifier scheme, memorable without a cheat sheet ──────────────────
-    #   $mod              + arrow = move focus
-    #   $mod SHIFT        + arrow = move window (or into a tab group)
-    #   $mod CTRL         + arrow = workspace forward/back
-    #   $mod ALT          + arrow = switch tab within a group
-    #   $mod CTRL SHIFT   + arrow = resize window
+    #   SUPER              + arrow = move focus
+    #   SUPER SHIFT        + arrow = move window (or into a tab group)
+    #   SUPER CTRL         + arrow = workspace forward/back
+    #   SUPER ALT          + arrow = switch tab within a group
+    #   SUPER CTRL SHIFT   + arrow = resize window
     #
-    # `bindd` (described binds) carries a human-readable description per bind;
-    # the cheat-sheet script above reads those back via `hyprctl binds -j`.
-    # Description sits between the key and the dispatcher.
-    bindd = [
+    # Every bind carries a `description`; the cheat sheet (SUPER+/) reads
+    # those back via `hyprctl binds -j`.
+    bind = [
       # ── Applications ───────────────────────────────────────────────────
-      "$mod, Return, Terminal, exec, $term"
-      "$mod SHIFT, Return, Terminal (floating), exec, [float; size 900 600] $term"
-      "$mod, E, File manager, exec, $files"
-      # App launcher on $mod+Space.
-      "$mod, Space, App launcher, exec, $menu"
-      "$mod SHIFT, R, Run dialog, exec, wofi --show run"
-      "$mod, B, Web browser, exec, $browser"      # Zen browser
-      "$mod SHIFT, B, Cycle power profile, exec, ${cyclePowerProfile}"
-      "$mod SHIFT, P, Private browser window, exec, $browser --private-window" # Zen private
-      "$mod, L, Lock screen, exec, hyprlock"
-      "$mod, V, Clipboard history, exec, cliphist list | wofi --dmenu | cliphist decode | wl-copy"
+      (bindd "Terminal" "SUPER + Return" (exec term))
+      (bindd "Terminal (floating)" "SUPER + SHIFT + Return" "hl.dsp.exec_cmd(${toLua term}, { float = true, size = \"900 600\" })")
+      (bindd "File manager" "SUPER + E" (exec files))
+      (bindd "App launcher" "SUPER + Space" (exec menu))
+      (bindd "Run dialog" "SUPER + SHIFT + R" (exec "wofi --show run"))
+      (bindd "Web browser" "SUPER + B" (exec browser))
+      (bindd "Cycle power profile" "SUPER + SHIFT + B" (exec "${cyclePowerProfile}"))
+      (bindd "Private browser window" "SUPER + SHIFT + P" (exec "${browser} --private-window"))
+      (bindd "Lock screen" "SUPER + L" (exec "hyprlock"))
+      (bindd "Clipboard history" "SUPER + V" (exec "cliphist list | wofi --dmenu | cliphist decode | wl-copy"))
       # Log out. Deliberately on SHIFT: on AZERTY, M sits right next to L, so
-      # a single missed key on $mod+L (lock) would throw away the session.
-      "$mod SHIFT, M, Log out, exit,"
+      # a single missed key on SUPER+L (lock) would throw away the session.
+      (bindd "Log out" "SUPER + SHIFT + M" "hl.dsp.exit()")
 
       # ── Windows ────────────────────────────────────────────────────────
-      "$mod, W, Close window, killactive,"
-      "$mod SHIFT, W, Force close window, forcekillactive,"   # for a hung window
-      "$mod, R, Toggle float, togglefloating,"
-      "$mod, C, Center window, centerwindow,"
-      "$mod, F, Fullscreen, fullscreen, 0"            # true fullscreen
-      "$mod SHIFT, F, Maximise (keep bar), fullscreen, 1"     # maximise, waybar stays visible
-      # Flipping the split direction is a layoutmsg in dwindle, not a
-      # dispatcher — "togglesplit" as a dispatcher does not exist.
-      "$mod, X, Toggle split direction, layoutmsg, togglesplit"
-      "$mod, P, Pseudo-tile, pseudo,"
+      (bindd "Close window" "SUPER + W" "hl.dsp.window.close()")
+      (bindd "Force close window" "SUPER + SHIFT + W" "hl.dsp.window.kill()")
+      (bindd "Toggle float" "SUPER + R" "hl.dsp.window.float({ action = \"toggle\" })")
+      (bindd "Center window" "SUPER + C" "hl.dsp.window.center()")
+      (bindd "Fullscreen" "SUPER + F" "hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
+      (bindd "Maximise (keep bar)" "SUPER + SHIFT + F" "hl.dsp.window.fullscreen({ mode = \"maximized\" })")
+      # Flipping the split direction is a layout message in dwindle.
+      (bindd "Toggle split direction" "SUPER + X" "hl.dsp.layout(\"togglesplit\")")
+      (bindd "Pseudo-tile" "SUPER + P" "hl.dsp.window.pseudo()")
 
       # ── Tabs (Hyprland calls these groups) ─────────────────────────────
-      # $mod+G turns the current window into a tab group; drag windows into it
-      # afterwards with $mod SHIFT + arrow.
-      "$mod, G, Toggle tab group, togglegroup,"
-      "$mod ALT, right, Next tab in group, changegroupactive, f"
-      "$mod ALT, left, Previous tab in group, changegroupactive, b"
+      # SUPER+G turns the current window into a tab group; drag windows into it
+      # afterwards with SUPER SHIFT + arrow.
+      (bindd "Toggle tab group" "SUPER + G" "hl.dsp.group.toggle()")
+      (bindd "Next tab in group" "SUPER + ALT + right" "hl.dsp.group.next()")
+      (bindd "Previous tab in group" "SUPER + ALT + left" "hl.dsp.group.prev()")
 
       # ── Focus ──────────────────────────────────────────────────────────
-      "$mod, left, Focus left, movefocus, l"
-      "$mod, right, Focus right, movefocus, r"
-      "$mod, up, Focus up, movefocus, u"
-      "$mod, down, Focus down, movefocus, d"
+      (bindd "Focus left" "SUPER + left" "hl.dsp.focus({ direction = \"left\" })")
+      (bindd "Focus right" "SUPER + right" "hl.dsp.focus({ direction = \"right\" })")
+      (bindd "Focus up" "SUPER + up" "hl.dsp.focus({ direction = \"up\" })")
+      (bindd "Focus down" "SUPER + down" "hl.dsp.focus({ direction = \"down\" })")
 
       # ── Move window ────────────────────────────────────────────────────
-      # movewindoworgroup instead of movewindow: moves the window across, but
-      # drops it into a tab group if the neighbour is one.
-      "$mod SHIFT, left, Move window left, movewindoworgroup, l"
-      "$mod SHIFT, right, Move window right, movewindoworgroup, r"
-      "$mod SHIFT, up, Move window up, movewindoworgroup, u"
-      "$mod SHIFT, down, Move window down, movewindoworgroup, d"
+      # group_aware: moves the window across, but drops it into a tab group if
+      # the neighbour is one.
+      (bindd "Move window left" "SUPER + SHIFT + left" "hl.dsp.window.move({ direction = \"left\", group_aware = true })")
+      (bindd "Move window right" "SUPER + SHIFT + right" "hl.dsp.window.move({ direction = \"right\", group_aware = true })")
+      (bindd "Move window up" "SUPER + SHIFT + up" "hl.dsp.window.move({ direction = \"up\", group_aware = true })")
+      (bindd "Move window down" "SUPER + SHIFT + down" "hl.dsp.window.move({ direction = \"down\", group_aware = true })")
 
       # ── Workspaces ─────────────────────────────────────────────────────
-      "$mod CTRL, right, Workspace forward, workspace, e+1"
-      "$mod CTRL, left, Workspace back, workspace, e-1"
-      "$mod CTRL SHIFT, right, Move to next workspace, movetoworkspace, e+1"
-      "$mod CTRL SHIFT, left, Move to previous workspace, movetoworkspace, e-1"
-      "$mod, Tab, Previous workspace, workspace, previous"          # jump back and forth
-      "$mod, mouse_down, Next workspace (scroll), workspace, e+1"   # $mod + scroll
-      "$mod, mouse_up, Previous workspace (scroll), workspace, e-1"
+      (bindd "Workspace forward" "SUPER + CTRL + right" "hl.dsp.focus({ workspace = \"e+1\" })")
+      (bindd "Workspace back" "SUPER + CTRL + left" "hl.dsp.focus({ workspace = \"e-1\" })")
+      (bindd "Move to next workspace" "SUPER + CTRL + SHIFT + right" "hl.dsp.window.move({ workspace = \"e+1\" })")
+      (bindd "Move to previous workspace" "SUPER + CTRL + SHIFT + left" "hl.dsp.window.move({ workspace = \"e-1\" })")
+      (bindd "Previous workspace" "SUPER + Tab" "hl.dsp.focus({ workspace = \"previous\" })")
+      (bindd "Next workspace (scroll)" "SUPER + mouse_down" "hl.dsp.focus({ workspace = \"e+1\" })")
+      (bindd "Previous workspace (scroll)" "SUPER + mouse_up" "hl.dsp.focus({ workspace = \"e-1\" })")
       # New empty workspace — and the same, taking the current window along.
-      "$mod, N, Go to empty workspace, workspace, empty"
-      "$mod SHIFT, N, Move to empty workspace, movetoworkspace, empty"
+      (bindd "Go to empty workspace" "SUPER + N" "hl.dsp.focus({ workspace = \"empty\" })")
+      (bindd "Move to empty workspace" "SUPER + SHIFT + N" "hl.dsp.window.move({ workspace = \"empty\" })")
       # Scratchpad: one workspace that folds in and out over everything else.
-      "$mod, S, Toggle scratchpad, togglespecialworkspace, magic"
-      "$mod SHIFT, S, Move to scratchpad, movetoworkspace, special:magic"
+      (bindd "Toggle scratchpad" "SUPER + S" "hl.dsp.workspace.toggle_special(\"magic\")")
+      (bindd "Move to scratchpad" "SUPER + SHIFT + S" "hl.dsp.window.move({ workspace = \"special:magic\" })")
 
       # ── AI agent scratchpad ────────────────────────────────────────────
-      "$mod, A, AI agent scratchpad, exec, ${agentScratchpad}"
+      (bindd "AI agent scratchpad" "SUPER + A" (exec "${agentScratchpad}"))
 
       # ── Cheat sheet ────────────────────────────────────────────────────
-      # Bound twice: on Belgian AZERTY slash needs Shift on some layouts/
-      # apps, so both chords hit the same script; harmless duplication.
-      "$mod, slash, Keybinding cheat sheet, exec, ${keybindCheatSheet}"
-      "$mod SHIFT, slash, Keybinding cheat sheet, exec, ${keybindCheatSheet}"
+      # Bound twice: on Belgian AZERTY slash needs Shift, so both chords hit
+      # the same script.
+      (bindd "Keybinding cheat sheet" "SUPER + slash" (exec "${keybindCheatSheet}"))
+      (bindd "Keybinding cheat sheet" "SUPER + SHIFT + slash" (exec "${keybindCheatSheet}"))
 
       # ── Screenshots ────────────────────────────────────────────────────
-      ", Print, Screenshot selection, exec, grim -g \"$(slurp)\" - | swappy -f -"   # selection -> edit
-      "$mod, Print, Screenshot active window, exec, ${screenshotWindow}"            # active window
-      "CTRL, Print, Screenshot selection to clipboard, exec, grim -g \"$(slurp)\" - | wl-copy"
-      "SHIFT, Print, Screenshot screen to clipboard, exec, grim - | wl-copy"
+      (bindd "Screenshot selection" "Print" (exec ''grim -g "$(slurp)" - | swappy -f -''))
+      (bindd "Screenshot active window" "SUPER + Print" (exec "${screenshotWindow}"))
+      (bindd "Screenshot selection to clipboard" "CTRL + Print" (exec ''grim -g "$(slurp)" - | wl-copy''))
+      (bindd "Screenshot screen to clipboard" "SHIFT + Print" (exec "grim - | wl-copy"))
 
       # ── Voice dictation (fully local) ──────────────────────────────────
-      # Vosk (streaming): $mod+F5 starts, $mod+F6 stops and types as you go.
-      # Whisper (toggle): $mod+F7 records; press again to transcribe and type.
-      "$mod, F5, Start dictation (Vosk), exec, ${homeDir}/.local/dict/vosk-begin.sh"
-      "$mod, F6, Stop dictation (Vosk), exec, ${homeDir}/.local/dict/vosk-end.sh"
-      "$mod, F7, Toggle dictation (Whisper), exec, ${homeDir}/.local/dict/whisper-dict.sh"
+      # Whisper large-v3-turbo on the GPU, Dutch, in two modes.
+      # SUPER+F5 toggles live mode: text appears per sentence, as you speak.
+      # SUPER+F7 records; press again to transcribe the whole take at once.
+      # F7 is the accurate one — it gives Whisper the full utterance as
+      # context, where live mode only ever sees the last few seconds.
+      (bindd "Toggle live dictation" "SUPER + F5" (exec "${homeDir}/.local/dict/stream-dict.sh"))
+      (bindd "Toggle dictation (whole take)" "SUPER + F7" (exec "${homeDir}/.local/dict/whisper-dict.sh"))
     ]
     # Workspace 1..10 on the number row.
     #
-    # NOTE: bind on the KEYCODE, not the keysym. `"$mod, 1, ..."` makes Hyprland
+    # NOTE: bind on the KEYCODE, not the keysym. `SUPER + 1` makes Hyprland
     # bind the keysym `1`, but on Belgian AZERTY that key unshifted produces
     # `ampersand` — `1` only exists with Shift, and `hyprctl binds` then reports
     # `key: 1, keycode: 0`, i.e. a bind that never fires. The keycode of the
@@ -308,47 +352,42 @@ in
         ws = toString (i + 1);
         key = "code:${toString (i + 10)}";
       in [
-        "$mod, ${key}, workspace, ${ws}"
-        "$mod SHIFT, ${key}, movetoworkspace, ${ws}"
-      ]) 10));
+        (bindd "Workspace ${ws}" "SUPER + ${key}" "hl.dsp.focus({ workspace = ${ws} })")
+        (bindd "Move to workspace ${ws}" "SUPER + SHIFT + ${key}" "hl.dsp.window.move({ workspace = ${ws} })")
+      ]) 10))
+    ++ [
+      # Drag/resize windows with the mouse (or touchpad) + SUPER.
+      (bindm "SUPER + mouse:272" "hl.dsp.window.drag()")     # drag with left button = move
+      (bindm "SUPER + mouse:273" "hl.dsp.window.resize()")   # drag with right button = resize
 
-    # Drag/resize windows with the mouse (or touchpad) + $mod.
-    bindm = [
-      "$mod, mouse:272, movewindow"     # drag with left button = move
-      "$mod, mouse:273, resizewindow"   # drag with right button = resize
-    ];
-
-    bindel = [
       # Resize from the keyboard; repeats while held.
-      "$mod CTRL SHIFT, right, resizeactive, 40 0"
-      "$mod CTRL SHIFT, left, resizeactive, -40 0"
-      "$mod CTRL SHIFT, down, resizeactive, 0 40"
-      "$mod CTRL SHIFT, up, resizeactive, 0 -40"
+      (bindel "SUPER + CTRL + SHIFT + right" (resize 40 0))
+      (bindel "SUPER + CTRL + SHIFT + left" (resize (-40) 0))
+      (bindel "SUPER + CTRL + SHIFT + down" (resize 0 40))
+      (bindel "SUPER + CTRL + SHIFT + up" (resize 0 (-40)))
 
       # Volume and brightness controls with Bellotto theme gallery plaque OSD popups
-      ", XF86AudioRaiseVolume, exec, ${volumeControl} up"
-      ", XF86AudioLowerVolume, exec, ${volumeControl} down"
-      ", XF86AudioMute, exec, ${volumeControl} mute"
-      ", XF86AudioMicMute, exec, ${volumeControl} mic-mute"
-      ", XF86MonBrightnessUp, exec, ${brightnessControl} up"
-      ", XF86MonBrightnessDown, exec, ${brightnessControl} down"
-    ];
+      (bindel "XF86AudioRaiseVolume" (exec "${volumeControl} up"))
+      (bindel "XF86AudioLowerVolume" (exec "${volumeControl} down"))
+      (bindel "XF86AudioMute" (exec "${volumeControl} mute"))
+      (bindel "XF86AudioMicMute" (exec "${volumeControl} mic-mute"))
+      (bindel "XF86MonBrightnessUp" (exec "${brightnessControl} up"))
+      (bindel "XF86MonBrightnessDown" (exec "${brightnessControl} down"))
 
-    bindl = [
-      ", XF86AudioPlay, exec, swayosd-client --playerctl play-pause"
-      ", XF86AudioNext, exec, swayosd-client --playerctl next"
-      ", XF86AudioPrev, exec, swayosd-client --playerctl prev"
+      (bindl "XF86AudioPlay" (exec "swayosd-client --playerctl play-pause"))
+      (bindl "XF86AudioNext" (exec "swayosd-client --playerctl next"))
+      (bindl "XF86AudioPrev" (exec "swayosd-client --playerctl prev"))
 
       # ── Lid closed = keep working on the ultrawide ─────────────────────
-      # `bindl` (l = lock) is the only bind type that still fires while the
-      # screen is locked; with a plain `bind` nothing happened once hyprlock was
-      # in front. The name "Lid Switch" comes verbatim from `hyprctl devices`.
+      # `locked` is the only bind flavour that still fires while the screen is
+      # locked; with a plain bind nothing happened once hyprlock was in front.
+      # The name "Lid Switch" comes verbatim from `hyprctl devices`.
       #
       # Disabling eDP-1 does the moving by itself: Hyprland shifts the
       # workspaces of a disappearing screen onto a remaining one, windows and
       # all. That is why nothing here has to move windows individually.
-      ", switch:on:Lid Switch, exec, ${lidClose}"
-      ", switch:off:Lid Switch, exec, ${lidOpen}"
+      (bindl "switch:on:Lid Switch" (exec "${lidClose}"))
+      (bindl "switch:off:Lid Switch" (exec "${lidOpen}"))
     ];
   };
 }

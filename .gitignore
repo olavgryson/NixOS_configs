@@ -8,3 +8,5 @@ id_*
 secrets/
 result
 result-*
+*.exe
+/IMG_*.jpg

@@ -86,4 +86,9 @@
     text_font=sans-serif
     paint_mode=brush
   '';
+
+  # Limit clipboard history to max 1000 items (oldest items automatically pruned).
+  xdg.configFile."cliphist/config".text = ''
+    max-items 1000
+  '';
 }

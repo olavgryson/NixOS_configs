@@ -178,10 +178,11 @@ let
     cp "$src/rofi.rasi"   "$HOME/.config/theme/rofi.rasi"
 
     . "$src/vars"
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border \
-      "rgba(''${SKY}ee) rgba(''${OCHRE}ee) 45deg" >/dev/null
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border \
-      "rgba(''${OVERLAY}aa)" >/dev/null
+    # The Lua config manager has no `hyprctl keyword`; a runtime option change
+    # is an `hl.config` call evaluated over IPC.
+    ${pkgs.hyprland}/bin/hyprctl eval "hl.config({ general = { col = {
+      active_border = { colors = { 'rgba(''${SKY}ee)', 'rgba(''${OCHRE}ee)' }, angle = 45 },
+      inactive_border = 'rgba(''${OVERLAY}aa)' } } })" >/dev/null || true
 
     # waybar re-reads its CSS on SIGUSR2.
     killall -SIGUSR2 waybar 2>/dev/null || true
@@ -203,18 +204,11 @@ let
       img="${wallpapers.${defaultWallpaper}}"
     fi
 
-    # The IPC socket may not be up at session start — short retry loop.
+    # hyprpaper loads the image itself on `wallpaper` (no preload step). Its
+    # IPC socket may not be up at session start — short retry loop.
     for _ in $(${pkgs.coreutils}/bin/seq 1 20); do
-      ${pkgs.hyprland}/bin/hyprctl hyprpaper preload "$img" >/dev/null 2>&1 && break
+      ${pkgs.hyprland}/bin/hyprctl hyprpaper wallpaper ",$img,cover" >/dev/null 2>&1 && break
       ${pkgs.coreutils}/bin/sleep 0.25
-    done
-    ${pkgs.hyprland}/bin/hyprctl hyprpaper wallpaper ",$img" >/dev/null
-
-    # Drop whichever image is no longer on screen to free its VRAM.
-    for other in ${lib.concatStringsSep " " (lib.attrValues wallpapers)}; do
-      if [ "$other" != "$img" ]; then
-        ${pkgs.hyprland}/bin/hyprctl hyprpaper unload "$other" >/dev/null 2>&1 || true
-      fi
     done
   '';
 
@@ -255,11 +249,16 @@ in
 
   xdg.dataFile = lib.foldl' (a: b: a // b) { } (lib.attrValues templates);
 
-  # Both apply scripts in exec (not exec-once): they must run on every
-  # Hyprland config reload, so a rebuild does not re-assert the declarative
-  # default over the user's saved theme.
-  wayland.windowManager.hyprland.settings.exec = [
-    "${paletteApply}"
-    "${wallpaperApply}"
-  ];
+  # Both apply scripts run at start AND on every config reload, so a rebuild
+  # does not re-assert the declarative default over the user's saved theme.
+  wayland.windowManager.hyprland.settings.on = map (event: {
+    _args = [
+      event
+      (lib.generators.mkLuaInline ''
+        function()
+          hl.exec_cmd("${paletteApply}")
+          hl.exec_cmd("${wallpaperApply}")
+        end'')
+    ];
+  }) [ "hyprland.start" "config.reloaded" ];
 }
