@@ -232,7 +232,29 @@ in
   # rule chgrps the knob to `video`. brightnessctl did not need this because it
   # goes through logind over D-Bus; swayosd does not.
   # `video` is already in extraGroups below.
-  services.udev.packages = [ pkgs.swayosd ];
+  services.udev.packages = [ pkgs.swayosd pkgs.ccid ];
+
+  # Belgian eID: pcscd drives USB smart-card readers (CCID), eid-mw is the
+  # card middleware. The browser side (NSS module) is in home/eid.nix.
+  services.pcscd.enable = true;
+  # pcscd runs as the unprivileged `pcscd` user; the CCID udev rules (pkgs.ccid
+  # in services.udev.packages above) give it access to the reader's USB device.
+  # USB autosuspend makes the VASCO DP905 reader time out on its first
+  # transfer (LIBUSB_ERROR_TIMEOUT, "init failed"); keep it powered.
+  services.udev.extraRules = ''
+    ACTION!="remove", SUBSYSTEM=="usb", ATTR{idVendor}=="1a44", ATTR{idProduct}=="0001", ATTR{power/control}="on"
+  '';
+  # pcsc-lite asks polkit before serving a client. The Hyprland session is not
+  # always seen as an "active" seat session, so allow wheel users explicitly.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if ((action.id == "org.debian.pcsc-lite.access_pcsc" ||
+           action.id == "org.debian.pcsc-lite.access_card") &&
+          subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
 
   # Brightness on the EXTERNAL screen travels a completely different path than the
   # laptop panel's. /sys/class/backlight exists only for the internal panel, where
@@ -520,6 +542,7 @@ in
     git vim wget curl
     pciutils usbutils
     libimobiledevice ifuse     # iOS USB communication and filesystem mounting
+    eid-mw                     # Belgian eID middleware + eid-viewer
     sbctl                      # secure boot helper (if needed later)
     networkmanagerapplet
     netbird-ui

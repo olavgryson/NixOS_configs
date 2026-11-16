@@ -17,6 +17,7 @@
     ./home/desktop/wm.nix           # Hyprland compositor
     ./home/shortcuts.nix   # Hyprland keyboard & mouse shortcuts
     ./home/webapps.nix     # PWA launchers (SoundCloud, Snapchat)
+    ./home/eid.nix         # Belgian eID in Chromium (NSS PKCS#11 module)
   ];
 
   home.username = "ogryson";
