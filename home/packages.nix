@@ -38,7 +38,7 @@
       };
     })
     github-copilot-cli                 # GitHub Copilot, terminal
-    inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-cli  # agy, latest via auto-update flake
+    inputs.antigravity-nix.packages.${pkgs.stdenv.hostPlatform.system}.google-antigravity-cli  # agy, latest via auto-update flake
     # gemini-cli: removed. Google cut this client off from Gemini Code Assist
     # for individuals — "Sign in with Google" fails and points at Antigravity.
     # Only a paid Gemini API key or Vertex AI still authenticates, so it buys
@@ -48,7 +48,7 @@
     firefox
     chromium                                              # drives the web-app launchers (--app=)
     librewolf                                             # extra hardened Firefox fork
-    inputs.zen-browser.packages.${pkgs.system}.default    # Zen
+    inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.default    # Zen
 
     ## --- dev tooling ---
     gh lazygit
@@ -68,7 +68,7 @@
     vscode
     neovim
     t3code                             # Minimal web/desktop GUI for coding agents
-    inputs.antigravity-nix.packages.${pkgs.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
+    inputs.antigravity-nix.packages.${pkgs.stdenv.hostPlatform.system}.google-antigravity-ide  # Google's AI editor, latest via auto-update flake
 
     ## --- terminal / CLI tools ---
     ripgrep fd fzf bat eza zoxide jq yq glib
@@ -127,7 +127,7 @@ PYEOF
     unzip zip p7zip tree file wget curl rsync
 
     ## --- apps (GUI) ---
-    inputs.claude-desktop.packages.${pkgs.system}.default # Claude Desktop (Anthropic Linux build in FHS container for MCP)
+    inputs.claude-desktop.packages.${pkgs.stdenv.hostPlatform.system}.default # Claude Desktop (Anthropic Linux build in FHS container for MCP)
     # Obsidian ignores the system dark-mode preference (its Chromium build never
     # queries gtk-application-prefer-dark-theme), so force Chromium's own switch.
     (pkgs.writeShellScriptBin "obsidian" ''

@@ -14,10 +14,9 @@ in
   # theme are part of the rebuild instead of the built-in "Default" theme.
   programs.rofi = {
     enable = true;
-    terminal = "${pkgs.kitty}/bin/kitty";
-    font = "JetBrainsMono Nerd Font 11";
-
-    extraConfig = {
+    settings = {
+      terminal = "${pkgs.kitty}/bin/kitty";
+      font = "JetBrainsMono Nerd Font 11";
       modes = "drun,run,window";
       show-icons = true;
       # Only the program name, not "Name (generic description)".

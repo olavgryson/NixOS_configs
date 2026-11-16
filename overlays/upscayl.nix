@@ -10,7 +10,7 @@
 # re-extracted, patched and re-wrapped here so the change survives rebuilds.
 final: prev:
 let
-  appimageContents = prev.appimageTools.extractType2 {
+  appimageContents = prev.appimageTools.extract {
     pname = "upscayl";
     version = prev.upscayl.version;
     src = prev.upscayl.src;

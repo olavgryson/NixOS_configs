@@ -152,7 +152,6 @@ in
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
-    jack.enable = true;
 
     # Bluetooth headsets that support HFP drop to headset profile (mSBC, mono,
     # telephony-quality audio) whenever any app opens the headset microphone.
@@ -348,15 +347,27 @@ in
   # unavailable (see below), how much plain s2idle suspend actually costs per
   # hour is what decides whether the laptop survives a night unplugged, and
   # that was never measured -- every previous overnight drain was the failed
-  # hibernate sitting there powered, not suspend itself. Both hooks land in one
-  # unit on 26.11 (ExecStart before sleep, ExecStop on resume), so read the
-  # pairs back with:  journalctl -u sleep-actions
-  powerManagement.powerDownCommands = ''
-    echo "battery before sleep: $(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/capacity)% ($(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/status))"
-  '';
-  powerManagement.powerUpCommands = ''
-    echo "battery after resume: $(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/capacity)% ($(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/status))"
-  '';
+  # hibernate sitting there powered, not suspend itself. sleep.target pulls the
+  # unit in before sleeping (ExecStart); StopWhenUnneeded stops it once
+  # sleep.target is left on resume (ExecStop). Read the pairs back with:
+  #   journalctl -u battery-sleep-log
+  systemd.services.battery-sleep-log =
+    let
+      battery = phase: pkgs.writeShellScript "battery-${phase}" ''
+        echo "battery ${phase}: $(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/capacity)% ($(${pkgs.coreutils}/bin/cat /sys/class/power_supply/BAT0/status))"
+      '';
+    in {
+      description = "Log battery level around sleep";
+      wantedBy = [ "sleep.target" ];
+      before = [ "sleep.target" ];
+      unitConfig.StopWhenUnneeded = true;
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${battery "before-sleep"}";
+        ExecStop = "${battery "after-resume"}";
+      };
+    };
   services.power-profiles-daemon.enable = true;
   # Intel thermal daemon: keeps the CPU out of thermal throttle zones and
   # parks cores in deeper C-states when idle. Standard on every Intel laptop

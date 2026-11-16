@@ -43,6 +43,8 @@ in
     # Chromium/Electron read this to answer "prefers-color-scheme" — without it
     # Obsidian etc. ignore the dark GTK theme and render light.
     gtk3.extraConfig = { gtk-application-prefer-dark-theme = 1; };
+    # GTK4/libadwaita ignores theme names; kept explicit to match GTK3.
+    gtk4.theme = config.gtk.theme;
     gtk4.extraConfig = { gtk-application-prefer-dark-theme = 1; };
     gtk3.bookmarks = [
       "file://${config.home.homeDirectory}/Documents"
