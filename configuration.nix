@@ -89,6 +89,11 @@ in
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.auto-optimise-store = true;
   nix.gc = { automatic = true; dates = "weekly"; options = "--delete-older-than 7d"; };
+  # The store shares the btrfs volume with / and /home. When free space drops
+  # below min-free during a build, Nix garbage-collects until max-free is free,
+  # so a large build cannot fill the disk between weekly GC runs.
+  nix.settings.min-free = 10 * 1024 * 1024 * 1024;
+  nix.settings.max-free = 30 * 1024 * 1024 * 1024;
   nixpkgs.config.allowUnfree = true;   # spotify, vscode, discord, steam, obsidian...
 
   #### Identity / locale ######################################################
@@ -492,6 +497,58 @@ in
       root = timeline // { SUBVOLUME = "/"; };
       home = timeline // { SUBVOLUME = "/home"; };
     };
+
+  #### btrfs maintenance ######################################################
+  # btrfs hands out space in chunks and does not return emptied chunks on its
+  # own. Once every chunk is allocated, metadata cannot grow and writes fail
+  # with ENOSPC while df still reports free space. A monthly balance of data
+  # chunks under 50% full returns that space to the unallocated pool.
+  # The subvolumes share one filesystem, so scrubbing and balancing / covers all.
+  services.btrfs.autoScrub = {
+    enable = true;
+    interval = "monthly";
+    fileSystems = [ "/" ];
+  };
+  systemd.services.btrfs-balance = {
+    description = "Compact half-empty btrfs data chunks";
+    serviceConfig = {
+      Type = "oneshot";
+      Nice = 19;
+      IOSchedulingClass = "idle";
+      ExecStart = "${pkgs.btrfs-progs}/bin/btrfs balance start -dusage=50 /";
+    };
+  };
+  systemd.timers.btrfs-balance = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "monthly";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
+  };
+
+  # Desktop warning when / has less than 15% free, checked every 15 minutes, so
+  # a large copy (VM disk, migration) is noticed before the volume fills.
+  systemd.user.services.low-disk-warning = {
+    description = "Warn when the root filesystem is low on space";
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.coreutils pkgs.libnotify ];
+    script = ''
+      read -r size avail < <(df --output=size,avail / | tail -1)
+      free=$(( avail * 100 / size ))
+      if [ "$free" -lt 15 ]; then
+        notify-send -u critical -a "Disk" "Low disk space" \
+          "Only $free% free on / ($(( avail / 1024 / 1024 )) GiB). Clean up before it fills."
+      fi
+    '';
+  };
+  systemd.user.timers.low-disk-warning = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "15min";
+    };
+  };
 
   #### External backup disk ###################################################
   # Kingston SV300S37A240G, 240G, ext4, label `backup`.
