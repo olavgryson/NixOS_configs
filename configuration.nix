@@ -467,18 +467,31 @@ in
   # not configured: with a separate @nix subvolume, booting an old snapshot
   # means mixing an old system with the current /nix store. Use boot menu
   # generations for system rollback and snapper for /home data.
-  services.snapper.configs = {
-    root = {
-      SUBVOLUME = "/";
-      TIMELINE_CREATE = true;
-      TIMELINE_CLEANUP = true;
+  #
+  # Snapshots share the btrfs volume with /nix, and a snapshot keeps every
+  # file deleted after it was taken. snapper's default limits keep monthly and
+  # yearly snapshots for years, which eventually fills the disk; on a full
+  # btrfs nscd, logind and logins fail, and the machine is unusable until
+  # snapshots are deleted from a root shell. So keep at most one week of
+  # history, and with the ranges ("0-N") let the daily cleanup delete down to
+  # zero whenever less than 20% of the volume is free.
+  services.snapper.configs =
+    let
+      timeline = {
+        TIMELINE_CREATE = true;
+        TIMELINE_CLEANUP = true;
+        TIMELINE_LIMIT_HOURLY = "0-10";
+        TIMELINE_LIMIT_DAILY = "0-7";
+        TIMELINE_LIMIT_WEEKLY = 0;
+        TIMELINE_LIMIT_MONTHLY = 0;
+        TIMELINE_LIMIT_QUARTERLY = 0;
+        TIMELINE_LIMIT_YEARLY = 0;
+        FREE_LIMIT = "0.2";
+      };
+    in {
+      root = timeline // { SUBVOLUME = "/"; };
+      home = timeline // { SUBVOLUME = "/home"; };
     };
-    home = {
-      SUBVOLUME = "/home";
-      TIMELINE_CREATE = true;
-      TIMELINE_CLEANUP = true;
-    };
-  };
 
   #### External backup disk ###################################################
   # Kingston SV300S37A240G, 240G, ext4, label `backup`.
