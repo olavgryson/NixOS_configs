@@ -56,6 +56,13 @@ let
     "$hyprctl" eval '${enableMonitorLua externalMonitor}'
   '';
 
+  dpmsOff = pkgs.writeShellScript "dpms-off" ''
+    ${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })'
+  '';
+  dpmsOn = pkgs.writeShellScript "dpms-on" ''
+    ${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'
+  '';
+
   # Reads the AC line (1 = charger plugged). Exits 0 when on AC power.
   onAc = pkgs.writeShellScript "on-ac" ''
     [ "$(${pkgs.coreutils}/bin/cat /sys/class/power_supply/AC/online)" = "1" ]
@@ -78,6 +85,12 @@ in
         # left unattended on the desk cannot stall behind a sleep/lock.
         # `/sys/class/power_supply/AC/online` is 1 when the charger is plugged.
         { timeout = 300;  on-timeout = "${onAc} || loginctl lock-session"; }
+        # Screens off 30s after the last input while the lock screen is up, so a
+        # manual lock (SUPER+L) blanks the panels too, also on AC. hypridle's
+        # idle timer counts from the last input, so this fires 30s after locking.
+        { timeout = 30;   on-timeout = "pidof hyprlock && ${dpmsOff}"; on-resume = "${dpmsOn}"; }
+        # Screens off after 10 min idle regardless of lock or power source.
+        { timeout = 600;  on-timeout = "${dpmsOff}"; on-resume = "${dpmsOn}"; }
         # Plain suspend, NOT suspend-then-hibernate. Hibernation is broken on
         # this hardware: the kernel snapshots memory fine and then a driver
         # fails to come back during the snapshot's resume phase
